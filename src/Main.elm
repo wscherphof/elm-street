@@ -207,8 +207,8 @@ view : Model -> Html Msg
 view model =
     div []
         [ div [ id "place"
-        , style "margin" ".5em 1em 0 3em"
-        ]
+            , style "margin" ".5em 1em 0 3em"
+            ]
             [ Textfield.view Mdc "textfield-q" model.mdc
                 [ Textfield.label "Plek"
                 , Textfield.value model.place
