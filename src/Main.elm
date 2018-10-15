@@ -194,7 +194,7 @@ ordinateTextField index label value model msg =
         [ Textfield.label label
         , Textfield.value value
         , Textfield.pattern "\\d+\\.?\\d*"
-        , Options.css "background-color" "rgba(255, 255, 255, 0.8)"
+        , Options.css "margin" ".5em .5em 0 0"
         , Options.onInput msg
         , Textfield.nativeControl
             [ Options.onBlur MapFly
@@ -206,20 +206,31 @@ ordinateTextField index label value model msg =
 view : Model -> Html Msg
 view model =
     div []
-        [ Textfield.view Mdc "textfield-q" model.mdc
-            [ Textfield.label "Plek"
-            , Textfield.value model.place
-            , Options.css "background-color" "rgba(255, 255, 255, 0.8)"
-            , Options.onInput GeocodeQuery
-            , Textfield.nativeControl
-                [ Options.onBlur SendGeocode
-                ]
+        [ div [ id "place"
+        , style "margin" ".5em 1em 0 3em"
+        ]
+            [ Textfield.view Mdc "textfield-q" model.mdc
+                [ Textfield.label "Plek"
+                , Textfield.value model.place
+                , Textfield.fullwidth
+                , Options.css "background-color" "rgba(255, 255, 255, 0.77)"
+                , Options.css "padding" "0 1em"
+                , Options.onInput GeocodeQuery
+                , Textfield.nativeControl
+                    [ Options.onBlur SendGeocode
+                    ]
+                ] []
             ]
-            []
-        , ordinateTextField "textfield-lon" "Lengtegraad" model.lon.input model Lon
-        , ordinateTextField "textfield-lat" "Breedtegraad" model.lat.input model Lat
-        , div
-            [ id "map"
+        , div [ id "lonlat"
+            , style "position" "absolute" , style "bottom" "0"
+            , style "margin" ".5em"
+            , style "padding-left" ".5em"
+            , style "background-color" "rgba(255, 255, 255, 0.77)"
+            ]
+            [ ordinateTextField "textfield-lon" "Lengtegraad" model.lon.input model Lon
+            , ordinateTextField "textfield-lat" "Breedtegraad" model.lat.input model Lat
+            ]
+        , div [ id "map"
             , style "position" "absolute" , style "top" "0" , style "left" "0"
             , style "width" "100%" , style "height" "100%"
             , style "z-index" "-1"
