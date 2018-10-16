@@ -18,16 +18,16 @@ import Url.Builder as Url
 ---- HTTP ----
 
 
-type alias Place =
+type alias PlaceModel =
     { lon : Float
     , lat : Float
     , displayName : String
     }
 
 
-placeDecoder : D.Decoder Place
+placeDecoder : D.Decoder PlaceModel
 placeDecoder =
-    D.map3 Place
+    D.map3 PlaceModel
         (D.field "lon" DE.parseFloat)
         (D.field "lat" DE.parseFloat)
         (D.field "display_name" D.string)
@@ -43,7 +43,7 @@ geocodeUrl q =
 
 geocode : String -> Cmd Msg
 geocode q =
-    Http.send Geocode (Http.get (geocodeUrl q) (D.list placeDecoder)) 
+    Http.send Places (Http.get (geocodeUrl q) (D.list placeDecoder)) 
 
 
 ---- MODEL ----
@@ -96,9 +96,9 @@ type Msg
     | Lat String
     | MapFly
     | MapCenter Coordinate
-    | GeocodeQuery String
-    | SendGeocode
-    | Geocode (Result Http.Error (List Place))
+    | Place String
+    | Geocode
+    | Places (Result Http.Error (List PlaceModel))
 
 
 decimals : Float -> Int -> Float
@@ -161,13 +161,13 @@ update msg model =
                 , lat = FloatField (String.fromFloat (decimals coordinate.lat 5)) (Just coordinate.lat)
             }, Cmd.none )
 
-        GeocodeQuery query ->
+        Place query ->
             ( { model | place = query }, Cmd.none )
 
-        SendGeocode ->
+        Geocode ->
             ( model, geocode model.place )
         
-        Geocode result ->
+        Places result ->
             case result of
                 Ok places ->
                     case (List.head places) of
@@ -218,9 +218,9 @@ view model =
                 -- , Textfield.trailingIcon "cancel"
                 , Options.css "background-color" "rgba(255, 255, 255, 0.77)"
                 , Options.css "padding" "0 1em"
-                , Options.onInput GeocodeQuery
+                , Options.onInput Place
                 , Textfield.nativeControl
-                    [ Options.onBlur SendGeocode
+                    [ Options.onBlur Geocode
                     ]
                 ] []
             ]
