@@ -193,8 +193,10 @@ ordinateTextField index label value model msg =
     Textfield.view Mdc index model.mdc
         [ Textfield.label label
         , Textfield.value value
+        , Textfield.box
         , Textfield.pattern "\\d+\\.?\\d*"
-        , Options.css "margin" ".5em .5em 0 0"
+        , Options.css "background-color" "rgba(255, 255, 255, 0.77)"
+        , Options.css "margin-left" ".5em"
         , Options.onInput msg
         , Textfield.nativeControl
             [ Options.onBlur MapFly
@@ -213,6 +215,7 @@ view model =
                 [ Textfield.label "Plek"
                 , Textfield.value model.place
                 , Textfield.fullwidth
+                -- , Textfield.trailingIcon "cancel"
                 , Options.css "background-color" "rgba(255, 255, 255, 0.77)"
                 , Options.css "padding" "0 1em"
                 , Options.onInput GeocodeQuery
@@ -223,9 +226,6 @@ view model =
             ]
         , div [ id "lonlat"
             , style "position" "absolute" , style "bottom" "0"
-            , style "margin" ".5em"
-            , style "padding-left" ".5em"
-            , style "background-color" "rgba(255, 255, 255, 0.77)"
             ]
             [ ordinateTextField "textfield-lon" "Lengtegraad" model.lon.input model Lon
             , ordinateTextField "textfield-lat" "Breedtegraad" model.lat.input model Lat
