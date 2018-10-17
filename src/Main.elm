@@ -177,12 +177,23 @@ update msg model =
             ( { model | dirty = True, place = query }, Cmd.none )
         
         PlaceKey code ->
-            case (Key.fromCode code) of
-                Key.Enter ->
-                    ( model, Task.attempt (\_ -> NoOp) (Dom.blur "textfield-place-native") )
-            
-                _ ->
-                    ( model, Cmd.none )
+            let
+                blur =
+                    case (Key.fromCode code) of
+                        Key.Enter ->
+                            True
+                        
+                        Key.Escape ->
+                            True
+                        
+                        _ ->
+                            False
+            in
+            if blur then
+                ( model, Task.attempt (\_ -> NoOp) (Dom.blur "textfield-place-native") )
+        
+            else
+                ( model, Cmd.none )
 
         PlaceBlur ->
             case model.dirty of
