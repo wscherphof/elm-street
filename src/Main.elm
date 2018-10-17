@@ -208,29 +208,45 @@ update msg model =
             ( model, Cmd.none )
 
         Lon lon ->
-            ( { model | lon = FloatField lon (String.toFloat lon) }, Cmd.none )
+            ( { model | dirty = True, lon = FloatField lon (String.toFloat lon) }, Cmd.none )
         
         LonKey code ->
             ( model, (blur code "textfield-lon-native" ) )
 
         Lat lat ->
-            ( { model | lat = FloatField lat (String.toFloat lat) }, Cmd.none )
+            ( { model | dirty = True, lat = FloatField lat (String.toFloat lat) }, Cmd.none )
         
         LatKey code ->
             ( model, (blur code "textfield-lat-native" ) )
 
         MapFly ->
-            ( model, Cmd.batch
-                [ mapFly model.lon.value model.lat.value
-                , reverseGeocode model.lon.value model.lat.value
-                ] )
+            case model.dirty of
+                False ->
+                    ( model, Cmd.none )
+
+                True ->
+                    ( { model | dirty = False }, Cmd.batch
+                        [ mapFly model.lon.value model.lat.value
+                        , reverseGeocode model.lon.value model.lat.value
+                        ] )
 
         MapCenter coordinate ->
-            ( { model
-                | dirty = True
-                , lon = FloatField (String.fromFloat (decimals coordinate.lon 5)) (Just coordinate.lon)
-                , lat = FloatField (String.fromFloat (decimals coordinate.lat 5)) (Just coordinate.lat)
-            }, reverseGeocode (Just coordinate.lon) (Just coordinate.lat) )
+            let
+                lon =
+                    decimals coordinate.lon 5
+
+                lat =
+                    decimals coordinate.lat 5
+            in
+            if String.toFloat(model.lon.input) == (Just lon)
+            && String.toFloat(model.lat.input) == (Just lat) then
+                (  model, Cmd.none)
+            
+            else
+                ( { model
+                    | lon = FloatField (String.fromFloat lon) (Just lon)
+                    , lat = FloatField (String.fromFloat lat) (Just lat)
+                }, reverseGeocode (Just coordinate.lon) (Just coordinate.lat) )
 
         Place query ->
             ( { model | dirty = True, place = query }, Cmd.none )
@@ -243,12 +259,12 @@ update msg model =
 
         PlaceBlur ->
             case model.dirty of
-                True ->
-                    ( { model | dirty = False }, geocode model.place )
-            
                 False ->
                     ( model, Cmd.none )
-                    
+
+                True ->
+                    ( { model | dirty = False }, geocode model.place )
+                                
         
         Geocode result ->
             case result of
@@ -271,10 +287,7 @@ update msg model =
         ReverseGeocode result ->
             case result of
                 Ok place ->
-                    ( { model
-                        | place = place.displayName
-                        , dirty = False
-                    }, Cmd.none )
+                    ( { model | place = place.displayName }, Cmd.none )
 
                 Err err ->
                     toast model (httpErrorMessage err "omgekeerd geocoderen")
