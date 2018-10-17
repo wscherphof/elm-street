@@ -8,6 +8,23 @@ var app = Elm.Main.init({
 
 registerServiceWorker();
 
+(function dom() {
+  app.ports.dom.subscribe(function(msg) {
+    switch (msg.Cmd) {
+      case 'SelectText':
+        selectText(msg.id);
+        break;
+    }
+
+    function selectText(id) {
+      var element = document.getElementById(id);
+      if (element && element.select) {
+        element.select();
+      }
+    }
+  });
+})();
+
 (function map() {
   app.ports.map.subscribe(function(msg) {
     switch (msg.Cmd) {

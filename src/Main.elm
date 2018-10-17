@@ -169,6 +169,7 @@ type Msg
     | PlaceKey Int
     | PlaceBlur
     | Places (Result Http.Error (List PlaceModel))
+    | SelectText String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -234,6 +235,9 @@ update msg model =
                 Err err ->
                     toast model (httpErrorMessage err "geocoderen")
 
+        SelectText id ->
+            ( model, selectText id )
+
 
 ---- VIEW ----
 
@@ -273,8 +277,9 @@ view model =
                 , Options.onInput Place
                 , Textfield.nativeControl
                     [ Options.id "textfield-place-native"
-                    , Options.onBlur PlaceBlur
+                    , Options.onFocus (SelectText "textfield-place-native")
                     , Options.on "keydown" (D.map PlaceKey keyCode)
+                    , Options.onBlur PlaceBlur
                     ]
                 ] []
             ]
@@ -331,6 +336,18 @@ mapFly maybeLon maybeLat =
                         , ("lat", E.float lat)
                         ]
                     )
+
+
+port dom : E.Value -> Cmd msg
+
+
+selectText : String -> Cmd msg
+selectText id =
+    dom (E.object
+        [ ("Cmd", E.string "SelectText")
+        , ("id", E.string id)
+        ]
+    )
 
 
 ---- PROGRAM ----
