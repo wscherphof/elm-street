@@ -48,7 +48,31 @@ geocodeUrl q =
 
 geocode : String -> Cmd Msg
 geocode q =
-    Http.send Places (Http.get (geocodeUrl q) (D.list placeDecoder)) 
+    Http.send Geocode (Http.get (geocodeUrl q) (D.list placeDecoder)) 
+
+
+reverseUrl : Float -> Float -> String
+reverseUrl lon lat = 
+    Url.crossOrigin "https://nominatim.openstreetmap.org" ["reverse"]
+        [ Url.string "lon" (String.fromFloat lon)
+        , Url.string "lat" (String.fromFloat lat)
+        , Url.string "format" "json"
+        ]
+
+
+reverseGeocode : Maybe Float -> Maybe Float -> Cmd Msg
+reverseGeocode maybeLon maybeLat =
+    case maybeLon of
+        Nothing ->
+            Cmd.none
+    
+        Just lon ->
+            case maybeLat of
+                Nothing ->
+                    Cmd.none
+            
+                Just lat ->
+                    Http.send ReverseGeocode (Http.get (reverseUrl lon lat) placeDecoder) 
 
 
 ---- MODEL ----
@@ -170,7 +194,8 @@ type Msg
     | PlaceKey Int
     | PlaceSelect
     | PlaceBlur
-    | Places (Result Http.Error (List PlaceModel))
+    | Geocode (Result Http.Error (List PlaceModel))
+    | ReverseGeocode (Result Http.Error PlaceModel)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -195,14 +220,17 @@ update msg model =
             ( model, (blur code "textfield-lat-native" ) )
 
         MapFly ->
-            ( { model | dirty = True }, mapFly model.lon.value model.lat.value )
+            ( model, Cmd.batch
+                [ mapFly model.lon.value model.lat.value
+                , reverseGeocode model.lon.value model.lat.value
+                ] )
 
         MapCenter coordinate ->
             ( { model
                 | dirty = True
                 , lon = FloatField (String.fromFloat (decimals coordinate.lon 5)) (Just coordinate.lon)
                 , lat = FloatField (String.fromFloat (decimals coordinate.lat 5)) (Just coordinate.lat)
-            }, Cmd.none )
+            }, reverseGeocode (Just coordinate.lon) (Just coordinate.lat) )
 
         Place query ->
             ( { model | dirty = True, place = query }, Cmd.none )
@@ -222,7 +250,7 @@ update msg model =
                     ( model, Cmd.none )
                     
         
-        Places result ->
+        Geocode result ->
             case result of
                 Ok places ->
                     case (List.head places) of
@@ -238,6 +266,18 @@ update msg model =
 
                 Err err ->
                     toast model (httpErrorMessage err "geocoderen")
+                    
+        
+        ReverseGeocode result ->
+            case result of
+                Ok place ->
+                    ( { model
+                        | place = place.displayName
+                        , dirty = False
+                    }, Cmd.none )
+
+                Err err ->
+                    toast model (httpErrorMessage err "omgekeerd geocoderen")
 
 
 ---- VIEW ----
