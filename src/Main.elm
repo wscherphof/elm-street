@@ -135,11 +135,34 @@ httpErrorMessage err base =
             "Datafout bij " ++ base ++ ": " ++ message
 
 
+blur : Int -> String -> Cmd Msg
+blur keycode id =
+    let
+        attempt =
+            case (Key.fromCode keycode) of
+                Key.Enter ->
+                    True
+                
+                Key.Escape ->
+                    True
+                
+                _ ->
+                    False
+    in
+    if attempt then
+        Task.attempt (\_ -> NoOp) (Dom.blur id)
+
+    else
+        Cmd.none
+
+
 type Msg
     = Mdc (Material.Msg Msg)
     | NoOp
     | Lon String
+    | LonKey Int
     | Lat String
+    | LatKey Int
     | MapFly
     | MapCenter Coordinate
     | Place String
@@ -159,9 +182,15 @@ update msg model =
 
         Lon lon ->
             ( { model | lon = FloatField lon (String.toFloat lon) }, Cmd.none )
+        
+        LonKey code ->
+            ( model, (blur code "textfield-lon-native" ) )
 
         Lat lat ->
             ( { model | lat = FloatField lat (String.toFloat lat) }, Cmd.none )
+        
+        LatKey code ->
+            ( model, (blur code "textfield-lat-native" ) )
 
         MapFly ->
             ( { model | dirty = True }, mapFly model.lon.value model.lat.value )
@@ -177,23 +206,7 @@ update msg model =
             ( { model | dirty = True, place = query }, Cmd.none )
         
         PlaceKey code ->
-            let
-                blur =
-                    case (Key.fromCode code) of
-                        Key.Enter ->
-                            True
-                        
-                        Key.Escape ->
-                            True
-                        
-                        _ ->
-                            False
-            in
-            if blur then
-                ( model, Task.attempt (\_ -> NoOp) (Dom.blur "textfield-place-native") )
-        
-            else
-                ( model, Cmd.none )
+            ( model, (blur code "textfield-place-native" ) )
 
         PlaceBlur ->
             case model.dirty of
@@ -225,8 +238,8 @@ update msg model =
 ---- VIEW ----
 
 
-ordinateTextField : String -> String -> String -> Model -> (String -> Msg) -> Html Msg
-ordinateTextField index label value model msg =
+ordinateTextField :  Model -> String -> String -> String -> (String -> Msg) -> (Int -> Msg) -> Html Msg
+ordinateTextField model index label value inputMsg keyMsg =
     Textfield.view Mdc index model.mdc
         [ Textfield.label label
         , Textfield.value value
@@ -234,9 +247,11 @@ ordinateTextField index label value model msg =
         , Textfield.pattern "\\d+\\.?\\d*"
         , Options.css "background-color" "rgba(255, 255, 255, 0.77)"
         , Options.css "margin-left" ".5em"
-        , Options.onInput msg
+        , Options.onInput inputMsg
         , Textfield.nativeControl
-            [ Options.onBlur MapFly
+            [ Options.id (index ++ "-native")
+            , Options.onBlur MapFly
+            , Options.on "keydown" (D.map keyMsg keyCode)
             ]
         ]
         []
@@ -266,8 +281,8 @@ view model =
         , div [ id "lonlat"
             , style "position" "absolute", style "bottom" "0"
             ]
-            [ ordinateTextField "textfield-lon" "Lengtegraad" model.lon.input model Lon
-            , ordinateTextField "textfield-lat" "Breedtegraad" model.lat.input model Lat
+            [ ordinateTextField model "textfield-lon" "Lengtegraad" model.lon.input Lon LonKey
+            , ordinateTextField model "textfield-lat" "Breedtegraad" model.lat.input Lat LatKey
             ]
         , div [ id "map"
             , style "position" "absolute", style "top" "0"
