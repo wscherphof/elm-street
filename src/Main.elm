@@ -12,6 +12,7 @@ import Material.Button as Button
 import Material.Options as Options
 import Material.Textfield as Textfield
 import Material.Snackbar as Snackbar
+import Material.Icon as Icon
 import Json.Encode as E
 import Http
 import Json.Decode as D
@@ -294,6 +295,11 @@ view model =
             , style "width" "100%", style "height" "100%"
             , style "z-index" "-1"
             ] []
+        , Icon.view [ Options.id "icon-visor"
+            , Options.css "position" "absolute"
+            , Options.css "top" "50%", Options.css "left" "50%"
+            , Options.css "transform" "translate(-50%, -50%)"
+            ] "gps_not_fixed"
         , Snackbar.view Mdc "my-snackbar" model.mdc [] []
         ]
 
