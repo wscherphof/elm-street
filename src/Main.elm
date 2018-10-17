@@ -64,6 +64,7 @@ type alias Model =
     , lon : FloatField
     , lat : FloatField
     , place : String
+    , placeDirty : Bool
     }
 
 
@@ -73,6 +74,7 @@ defaultModel =
     , lon = FloatField "" Nothing
     , lat = FloatField "" Nothing
     , place = ""
+    , placeDirty = False
     }
 
 
@@ -92,19 +94,6 @@ type alias Coordinate =
     { lon : Float
     , lat : Float
     }
-
-
-type Msg
-    = Mdc (Material.Msg Msg)
-    | NoOp
-    | Lon String
-    | Lat String
-    | MapFly
-    | MapCenter Coordinate
-    | Place String
-    | PlaceKey Int
-    | Geocode
-    | Places (Result Http.Error (List PlaceModel))
 
 
 decimals : Float -> Int -> Float
@@ -146,6 +135,19 @@ httpErrorMessage err base =
             "Datafout bij " ++ base ++ ": " ++ message
 
 
+type Msg
+    = Mdc (Material.Msg Msg)
+    | NoOp
+    | Lon String
+    | Lat String
+    | MapFly
+    | MapCenter Coordinate
+    | Place String
+    | PlaceKey Int
+    | PlaceBlur
+    | Places (Result Http.Error (List PlaceModel))
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -171,7 +173,7 @@ update msg model =
             }, Cmd.none )
 
         Place query ->
-            ( { model | place = query }, Cmd.none )
+            ( { model | place = query, placeDirty = True }, Cmd.none )
         
         PlaceKey code ->
             case (Key.fromCode code) of
@@ -181,8 +183,14 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        Geocode ->
-            ( model, geocode model.place )
+        PlaceBlur ->
+            case model.placeDirty of
+                True ->
+                    ( { model | placeDirty = False }, geocode model.place )
+            
+                False ->
+                    ( model, Cmd.none )
+                    
         
         Places result ->
             case result of
@@ -238,7 +246,7 @@ view model =
                 , Options.onInput Place
                 , Textfield.nativeControl
                     [ Options.id "textfield-place-native"
-                    , Options.onBlur Geocode
+                    , Options.onBlur PlaceBlur
                     , Options.on "keydown" (D.map PlaceKey keyCode)
                     ]
                 ] []
