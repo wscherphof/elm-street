@@ -64,7 +64,7 @@ type alias Model =
     , lon : FloatField
     , lat : FloatField
     , place : String
-    , placeDirty : Bool
+    , dirty : Bool
     }
 
 
@@ -74,7 +74,7 @@ defaultModel =
     , lon = FloatField "" Nothing
     , lat = FloatField "" Nothing
     , place = ""
-    , placeDirty = False
+    , dirty = False
     }
 
 
@@ -164,16 +164,17 @@ update msg model =
             ( { model | lat = FloatField lat (String.toFloat lat) }, Cmd.none )
 
         MapFly ->
-            ( model, mapFly model.lon.value model.lat.value )
+            ( { model | dirty = True }, mapFly model.lon.value model.lat.value )
 
         MapCenter coordinate ->
             ( { model
-                | lon = FloatField (String.fromFloat (decimals coordinate.lon 5)) (Just coordinate.lon)
+                | dirty = True
+                , lon = FloatField (String.fromFloat (decimals coordinate.lon 5)) (Just coordinate.lon)
                 , lat = FloatField (String.fromFloat (decimals coordinate.lat 5)) (Just coordinate.lat)
             }, Cmd.none )
 
         Place query ->
-            ( { model | place = query, placeDirty = True }, Cmd.none )
+            ( { model | dirty = True, place = query }, Cmd.none )
         
         PlaceKey code ->
             case (Key.fromCode code) of
@@ -184,9 +185,9 @@ update msg model =
                     ( model, Cmd.none )
 
         PlaceBlur ->
-            case model.placeDirty of
+            case model.dirty of
                 True ->
-                    ( { model | placeDirty = False }, geocode model.place )
+                    ( { model | dirty = False }, geocode model.place )
             
                 False ->
                     ( model, Cmd.none )
