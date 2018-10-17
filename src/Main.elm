@@ -1,8 +1,12 @@
 port module Main exposing (..)
 
 import Browser
+import Browser.Dom as Dom
+import Task
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Html.Events exposing (..)
+import Keyboard.Key as Key
 import Material
 import Material.Button as Button
 import Material.Options as Options
@@ -92,11 +96,13 @@ type alias Coordinate =
 
 type Msg
     = Mdc (Material.Msg Msg)
+    | NoOp
     | Lon String
     | Lat String
     | MapFly
     | MapCenter Coordinate
     | Place String
+    | PlaceKey Int
     | Geocode
     | Places (Result Http.Error (List PlaceModel))
 
@@ -145,6 +151,9 @@ update msg model =
     case msg of
         Mdc msg_ ->
             Material.update Mdc msg_ model
+        
+        NoOp ->
+            ( model, Cmd.none )
 
         Lon lon ->
             ( { model | lon = FloatField lon (String.toFloat lon) }, Cmd.none )
@@ -163,6 +172,14 @@ update msg model =
 
         Place query ->
             ( { model | place = query }, Cmd.none )
+        
+        PlaceKey code ->
+            case (Key.fromCode code) of
+                Key.Enter ->
+                    ( model, Task.attempt (\_ -> NoOp) (Dom.blur "textfield-place-native") )
+            
+                _ ->
+                    ( model, Cmd.none )
 
         Geocode ->
             ( model, geocode model.place )
@@ -211,7 +228,7 @@ view model =
         [ div [ id "place"
             , style "margin" ".5em 1em 0 3em"
             ]
-            [ Textfield.view Mdc "textfield-q" model.mdc
+            [ Textfield.view Mdc "textfield-place" model.mdc
                 [ Textfield.label "Plek"
                 , Textfield.value model.place
                 , Textfield.fullwidth
@@ -220,7 +237,9 @@ view model =
                 , Options.css "padding" "0 1em"
                 , Options.onInput Place
                 , Textfield.nativeControl
-                    [ Options.onBlur Geocode
+                    [ Options.id "textfield-place-native"
+                    , Options.onBlur Geocode
+                    , Options.on "keydown" (D.map PlaceKey keyCode)
                     ]
                 ] []
             ]

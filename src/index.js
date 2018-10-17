@@ -12,14 +12,14 @@ registerServiceWorker();
   app.ports.map.subscribe(function(msg) {
     switch (msg.Cmd) {
       case 'Fly':
-        fly(msg);
+        fly(msg.lon, msg.lat);
         break;
-  }
+    }
   });
   
   const flyTime = 2000;
-  function fly(msg) {
-    var coordinate = ol.proj.fromLonLat([msg.lon, msg.lat]);
+  function fly(lon, lat) {
+    var coordinate = ol.proj.fromLonLat([lon, lat]);
     var view = getMap().getView();
     var width = getMap().getSize()[0];
     if (ol.sphere.getDistance(coordinate, view.getCenter()) > width / 100) {
@@ -72,4 +72,3 @@ registerServiceWorker();
     return _map;
   }
 })();
-
