@@ -253,14 +253,14 @@ view model =
                 ] []
             ]
         , div [ id "lonlat"
-            , style "position" "absolute" , style "bottom" "0"
+            , style "position" "absolute", style "bottom" "0"
             ]
             [ ordinateTextField "textfield-lon" "Lengtegraad" model.lon.input model Lon
             , ordinateTextField "textfield-lat" "Breedtegraad" model.lat.input model Lat
             ]
         , div [ id "map"
-            , style "position" "absolute" , style "top" "0" , style "left" "0"
-            , style "width" "100%" , style "height" "100%"
+            , style "position" "absolute", style "top" "0"
+            , style "width" "100%", style "height" "100%"
             , style "z-index" "-1"
             ] []
         , Snackbar.view Mdc "my-snackbar" model.mdc [] []
