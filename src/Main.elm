@@ -306,7 +306,7 @@ ordinateTextField model field label value inputMsg keyMsg =
         [ Textfield.label label
         , Textfield.value value
         , Textfield.box
-        , Textfield.pattern "\\d+\\.?\\d*"
+        , Textfield.pattern "-?\\d+\\.?\\d*"
         , Options.css "background-color" "rgba(255, 255, 255, 0.77)"
         , Options.css "margin-left" ".5em"
         , Options.onInput inputMsg
