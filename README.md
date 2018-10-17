@@ -1,5 +1,5 @@
 # elm-map-demo
-Demo running an [OpenLayers](https://openlayers.org/) map in an Elm 0.19 app
+Demo running an [OpenLayers](https://openlayers.org/) map in an [Elm 0.19](https://elm-lang.org/) app
 
 App [boilerplate](create-elm-app.md) by `create-elm-app`.
 
