@@ -192,10 +192,10 @@ type Msg
     | MapCenter Coordinate
     | Place String
     | PlaceKey Int
-    | PlaceSelect
     | PlaceBlur
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
+    | SelectText String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -254,9 +254,6 @@ update msg model =
         PlaceKey code ->
             ( model, (blur code "textfield-place-native" ) )
 
-        PlaceSelect ->
-            ( model, selectText "textfield-place-native" )
-
         PlaceBlur ->
             case model.dirty of
                 False ->
@@ -292,12 +289,19 @@ update msg model =
                 Err err ->
                     toast model (httpErrorMessage err "omgekeerd geocoderen")
 
+        SelectText field  ->
+            ( model, selectText ("textfield-" ++ field ++ "-native") )
+
 
 ---- VIEW ----
 
 
 ordinateTextField :  Model -> String -> String -> String -> (String -> Msg) -> (Int -> Msg) -> Html Msg
-ordinateTextField model index label value inputMsg keyMsg =
+ordinateTextField model field label value inputMsg keyMsg =
+    let
+        index =
+            "textfield-" ++ field
+    in
     Textfield.view Mdc index model.mdc
         [ Textfield.label label
         , Textfield.value value
@@ -308,6 +312,7 @@ ordinateTextField model index label value inputMsg keyMsg =
         , Options.onInput inputMsg
         , Textfield.nativeControl
             [ Options.id (index ++ "-native")
+            , Options.onFocus (SelectText field)
             , Options.onBlur MapFly
             , Options.on "keydown" (D.map keyMsg keyCode)
             ]
@@ -333,7 +338,7 @@ view model =
                 , Options.onInput Place
                 , Textfield.nativeControl
                     [ Options.id "textfield-place-native"
-                    , Options.onFocus PlaceSelect
+                    , Options.onFocus (SelectText "place")
                     , Options.on "keydown" (D.map PlaceKey keyCode)
                     , Options.onBlur PlaceBlur
                     ]
@@ -342,8 +347,8 @@ view model =
         , div [ id "lonlat"
             , style "position" "absolute", style "bottom" "0"
             ]
-            [ ordinateTextField model "textfield-lon" "Lengtegraad" model.lon.input Lon LonKey
-            , ordinateTextField model "textfield-lat" "Breedtegraad" model.lat.input Lat LatKey
+            [ ordinateTextField model "lon" "Lengtegraad" model.lon.input Lon LonKey
+            , ordinateTextField model "lat" "Breedtegraad" model.lat.input Lat LatKey
             ]
         , div [ id "map"
             , style "position" "absolute", style "top" "0"
