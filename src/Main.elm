@@ -167,9 +167,9 @@ type Msg
     | MapCenter Coordinate
     | Place String
     | PlaceKey Int
+    | PlaceSelect
     | PlaceBlur
     | Places (Result Http.Error (List PlaceModel))
-    | SelectText String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -209,6 +209,9 @@ update msg model =
         PlaceKey code ->
             ( model, (blur code "textfield-place-native" ) )
 
+        PlaceSelect ->
+            ( model, selectText "textfield-place-native" )
+
         PlaceBlur ->
             case model.dirty of
                 True ->
@@ -234,9 +237,6 @@ update msg model =
 
                 Err err ->
                     toast model (httpErrorMessage err "geocoderen")
-
-        SelectText id ->
-            ( model, selectText id )
 
 
 ---- VIEW ----
@@ -277,7 +277,7 @@ view model =
                 , Options.onInput Place
                 , Textfield.nativeControl
                     [ Options.id "textfield-place-native"
-                    , Options.onFocus (SelectText "textfield-place-native")
+                    , Options.onFocus PlaceSelect
                     , Options.on "keydown" (D.map PlaceKey keyCode)
                     , Options.onBlur PlaceBlur
                     ]
