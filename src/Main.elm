@@ -266,7 +266,9 @@ view : Model -> Html Msg
 view model =
     div []
         [ div [ id "place"
-            , style "margin" ".5em 1em 0 3em"
+            , style "position" "absolute"
+            , style "top" ".5em", style "left" "3em"
+            , style "width" "calc(100% - 4em)"
             ]
             [ Textfield.view Mdc "textfield-place" model.mdc
                 [ Textfield.label "Plek"
