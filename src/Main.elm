@@ -287,11 +287,6 @@ port mapCenter : (Coordinate -> msg) -> Sub msg
 port map : E.Value -> Cmd msg
 
 
-mapInit : Cmd msg
-mapInit =
-    map (E.object [ ("Cmd", E.string "Init") ])
-
-
 mapFly : (Maybe Float) -> (Maybe Float) -> Cmd msg
 mapFly maybeLon maybeLat =
     case maybeLon of
