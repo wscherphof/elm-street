@@ -35,5 +35,6 @@
         "indirect": {
             "elm/random": "1.0.0"
         }
-    }
+    },
+    "homepage": "https://wscherphof.github.io/elm-map-demo"
 }
