@@ -377,7 +377,7 @@ view model =
         [ div [ id "place"
             , style "position" "absolute"
             , style "top" ".5em", style "left" "3em"
-            , style "width" "calc(100% - 4em)"
+            , style "width" "calc(100% - 6em)"
             ]
             [ Textfield.view Mdc "textfield-place" model.mdc
                 [ Textfield.label "Plek"
