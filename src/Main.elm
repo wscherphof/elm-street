@@ -3,6 +3,7 @@ port module Main exposing (..)
 import Browser
 import Browser.Dom as Dom
 import Task
+import Array
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
@@ -78,16 +79,39 @@ reverseGeocode maybeLon maybeLat =
 ---- MODEL ----
 
 
-type alias FloatField =
-    { input : String
-    , value : Maybe Float
-    }
+floatFormat : String -> String
+floatFormat input =
+    case (String.toFloat input) of
+        Nothing ->
+            ""
+            
+        Just float ->
+            let
+                parts =
+                    Array.fromList (String.split "." input)
+            in
+            if Array.length parts == 2
+            && String.length (Maybe.withDefault "" (Array.get 1 parts)) > 5 then
+                let
+                    absFloat =
+                        abs float
+
+                    fraction =
+                        absFloat - toFloat (floor absFloat)
+
+                    decimals =
+                        String.fromInt (round (fraction * 100000))
+                in
+                (Maybe.withDefault "" (Array.get 0 parts)) ++ "." ++ decimals
+            
+            else
+                input
 
 
 type alias Model =
     { mdc : Material.Model Msg
-    , lon : FloatField
-    , lat : FloatField
+    , lon : String
+    , lat : String
     , place : String
     , dirty : Bool
     }
@@ -96,8 +120,8 @@ type alias Model =
 defaultModel : Model
 defaultModel =
     { mdc = Material.defaultModel
-    , lon = FloatField "" Nothing
-    , lat = FloatField "" Nothing
+    , lon = ""
+    , lat = ""
     , place = ""
     , dirty = False
     }
@@ -119,15 +143,6 @@ type alias Coordinate =
     { lon : Float
     , lat : Float
     }
-
-
-decimals : Float -> Int -> Float
-decimals given number =
-    let
-        times =
-            toFloat (10 ^ number)
-    in
-    toFloat (round (given * times)) / times
 
 
 toast : Model -> String -> ( Model, Cmd Msg )
@@ -207,14 +222,14 @@ update msg model =
         NoOp ->
             ( model, Cmd.none )
 
-        Lon lon ->
-            ( { model | dirty = True, lon = FloatField lon (String.toFloat lon) }, Cmd.none )
+        Lon input ->
+            ( { model | dirty = True, lon = input }, Cmd.none )
         
         LonKey code ->
             ( model, (blur code "textfield-lon-native" ) )
 
-        Lat lat ->
-            ( { model | dirty = True, lat = FloatField lat (String.toFloat lat) }, Cmd.none )
+        Lat input ->
+            ( { model | dirty = True, lat = input }, Cmd.none )
         
         LatKey code ->
             ( model, (blur code "textfield-lat-native" ) )
@@ -225,27 +240,31 @@ update msg model =
                     ( model, Cmd.none )
 
                 True ->
-                    ( { model | dirty = False }, Cmd.batch
-                        [ mapFly model.lon.value model.lat.value
-                        , reverseGeocode model.lon.value model.lat.value
+                    ( { model
+                        | dirty = False
+                        , lon = (floatFormat model.lon)
+                        , lat = (floatFormat model.lat)
+                    }, Cmd.batch
+                        [ mapFly (String.toFloat model.lon) (String.toFloat model.lat)
+                        , reverseGeocode (String.toFloat model.lon) (String.toFloat model.lat)
                         ] )
 
         MapCenter coordinate ->
             let
                 lon =
-                    decimals coordinate.lon 5
+                    floatFormat (String.fromFloat coordinate.lon)
 
                 lat =
-                    decimals coordinate.lat 5
+                    floatFormat (String.fromFloat coordinate.lat)
             in
-            if String.toFloat(model.lon.input) == (Just lon)
-            && String.toFloat(model.lat.input) == (Just lat) then
+            if lon == model.lon
+            && lat == model.lat then
                 (  model, Cmd.none)
             
             else
                 ( { model
-                    | lon = FloatField (String.fromFloat lon) (Just lon)
-                    , lat = FloatField (String.fromFloat lat) (Just lat)
+                    | lon = lon
+                    , lat = lat
                 }, reverseGeocode (Just coordinate.lon) (Just coordinate.lat) )
 
         Place query ->
@@ -272,8 +291,8 @@ update msg model =
                             
                         Just place ->
                             ( { model
-                                | lon = FloatField (String.fromFloat (decimals place.lon 5)) (Just place.lon)
-                                , lat = FloatField (String.fromFloat (decimals place.lat 5)) (Just place.lat)
+                                | lon = floatFormat (String.fromFloat place.lon)
+                                , lat = floatFormat (String.fromFloat place.lat)
                                 , place = place.displayName
                             }, mapFly (Just place.lon) (Just place.lat) )
 
@@ -306,7 +325,7 @@ ordinateTextField model field label value inputMsg keyMsg =
         [ Textfield.label label
         , Textfield.value value
         , Textfield.box
-        , Textfield.pattern "-?\\d+\\.?\\d*"
+        , Textfield.pattern "-?\\d\\d?\\d?\\.?\\d*"
         , Options.css "background-color" "rgba(255, 255, 255, 0.77)"
         , Options.css "margin-left" ".5em"
         , Options.onInput inputMsg
@@ -347,8 +366,8 @@ view model =
         , div [ id "lonlat"
             , style "position" "absolute", style "bottom" "0"
             ]
-            [ ordinateTextField model "lon" "Lengtegraad" model.lon.input Lon LonKey
-            , ordinateTextField model "lat" "Breedtegraad" model.lat.input Lat LatKey
+            [ ordinateTextField model "lon" "Lengtegraad" model.lon Lon LonKey
+            , ordinateTextField model "lat" "Breedtegraad" model.lat Lat LatKey
             ]
         , div [ id "map"
             , style "position" "absolute", style "top" "0"
