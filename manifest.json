@@ -1,6 +1,6 @@
 {
-  "short_name": "Elm App",
-  "name": "Create Elm App Sample",
+  "short_name": "Elm Map Demo",
+  "name": "Demo running an OpenLayers map in an Elm (0.19) app",
   "icons": [
     {
       "src": "favicon.ico",
