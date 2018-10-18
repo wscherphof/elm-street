@@ -111,9 +111,11 @@ floatFormat input =
 type alias Model =
     { mdc : Material.Model Msg
     , lon : String
+    , lon_old : String
     , lat : String
+    , lat_old : String
     , place : String
-    , dirty : Bool
+    , place_old : String
     }
 
 
@@ -121,9 +123,11 @@ defaultModel : Model
 defaultModel =
     { mdc = Material.defaultModel
     , lon = ""
+    , lon_old = ""
     , lat = ""
+    , lat_old = ""
     , place = ""
-    , dirty = False
+    , place_old = ""
     }
 
 
@@ -175,25 +179,17 @@ httpErrorMessage err base =
             "Datafout bij " ++ base ++ ": " ++ message
 
 
-blur : Int -> String -> Cmd Msg
-blur keycode id =
-    let
-        attempt =
-            case (Key.fromCode keycode) of
-                Key.Enter ->
-                    True
-                
-                Key.Escape ->
-                    True
-                
-                _ ->
-                    False
-    in
-    if attempt then
-        Task.attempt (\_ -> NoOp) (Dom.blur id)
+blur : String -> Cmd Msg
+blur id =
+    Task.attempt (\_ -> NoOp) (Dom.blur id)
 
-    else
-        Cmd.none
+
+latLon : Model -> Cmd Msg
+latLon model =
+    Cmd.batch
+        [ mapFly (String.toFloat model.lon) (String.toFloat model.lat)
+        , reverseGeocode (String.toFloat model.lon) (String.toFloat model.lat)
+        ]
 
 
 type Msg
@@ -201,13 +197,14 @@ type Msg
     | NoOp
     | Lon String
     | LonKey Int
+    | LonBlur
     | Lat String
     | LatKey Int
-    | MapFly
-    | MapCenter Coordinate
+    | LatBlur
     | Place String
     | PlaceKey Int
     | PlaceBlur
+    | MapCenter Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
     | SelectText String
@@ -223,31 +220,75 @@ update msg model =
             ( model, Cmd.none )
 
         Lon input ->
-            ( { model | dirty = True, lon = input }, Cmd.none )
-        
-        LonKey code ->
-            ( model, (blur code "textfield-lon-native" ) )
+            ( { model | lon = input }, Cmd.none )
 
         Lat input ->
-            ( { model | dirty = True, lat = input }, Cmd.none )
+            ( { model | lat = input }, Cmd.none )
+
+        Place input ->
+            ( { model | place = input }, Cmd.none )
+        
+        LonKey code ->
+            case (Key.fromCode code) of
+                Key.Enter ->
+                    ( model, (blur "textfield-lon-native" ) )
+                
+                Key.Escape ->
+                    ( { model | lon = model.lon_old }, (blur "textfield-lon-native" ) )
+                
+                _ ->
+                    ( model, Cmd.none )
         
         LatKey code ->
-            ( model, (blur code "textfield-lat-native" ) )
-
-        MapFly ->
-            case model.dirty of
-                False ->
+            case (Key.fromCode code) of
+                Key.Enter ->
+                    ( model, (blur "textfield-lat-native" ) )
+                
+                Key.Escape ->
+                    ( { model | lat = model.lat_old }, (blur "textfield-lat-native" ) )
+                
+                _ ->
+                    ( model, Cmd.none )
+        
+        PlaceKey code ->
+            case (Key.fromCode code) of
+                Key.Enter ->
+                    ( model, (blur "textfield-place-native" ) )
+                
+                Key.Escape ->
+                    ( { model | place = model.place_old }, (blur "textfield-place-native" ) )
+                
+                _ ->
                     ( model, Cmd.none )
 
-                True ->
-                    ( { model
-                        | dirty = False
-                        , lon = (floatFormat model.lon)
-                        , lat = (floatFormat model.lat)
-                    }, Cmd.batch
-                        [ mapFly (String.toFloat model.lon) (String.toFloat model.lat)
-                        , reverseGeocode (String.toFloat model.lon) (String.toFloat model.lat)
-                        ] )
+        LonBlur ->
+            let
+                lon =
+                    floatFormat model.lon
+            in
+            if lon == model.lon_old then
+                ( { model | lon = lon }, Cmd.none )
+            
+            else
+                ( { model | lon_old = lon, lon = lon }, latLon model )
+
+        LatBlur ->
+            let
+                lat =
+                    floatFormat model.lat
+            in
+            if lat == model.lat_old then
+                ( { model | lat = lat }, Cmd.none )
+            
+            else
+                ( { model | lat_old = lat, lat = lat }, latLon model )
+
+        PlaceBlur ->
+            if model.place == model.place_old then
+                ( model, Cmd.none )
+            
+            else
+                ( { model | place_old = model.place }, geocode model.place )
 
         MapCenter coordinate ->
             let
@@ -263,25 +304,10 @@ update msg model =
             
             else
                 ( { model
-                    | lon = lon
-                    , lat = lat
+                    | lon_old = lon, lon = lon
+                    , lat_old = lat, lat = lat
                 }, reverseGeocode (Just coordinate.lon) (Just coordinate.lat) )
-
-        Place query ->
-            ( { model | dirty = True, place = query }, Cmd.none )
-        
-        PlaceKey code ->
-            ( model, (blur code "textfield-place-native" ) )
-
-        PlaceBlur ->
-            case model.dirty of
-                False ->
-                    ( model, Cmd.none )
-
-                True ->
-                    ( { model | dirty = False }, geocode model.place )
                                 
-        
         Geocode result ->
             case result of
                 Ok places ->
@@ -290,10 +316,18 @@ update msg model =
                             ( model, Cmd.none )
                             
                         Just place ->
+                            let
+                                lon =
+                                    floatFormat (String.fromFloat place.lon)
+
+                                lat =
+                                    floatFormat (String.fromFloat place.lat)
+                            in
                             ( { model
-                                | lon = floatFormat (String.fromFloat place.lon)
-                                , lat = floatFormat (String.fromFloat place.lat)
+                                | lon_old = lon, lon = lon
+                                , lat_old = lat, lat = lat
                                 , place = place.displayName
+                                , place_old = place.displayName
                             }, mapFly (Just place.lon) (Just place.lat) )
 
                 Err err ->
@@ -315,8 +349,8 @@ update msg model =
 ---- VIEW ----
 
 
-ordinateTextField :  Model -> String -> String -> String -> (String -> Msg) -> (Int -> Msg) -> Html Msg
-ordinateTextField model field label value inputMsg keyMsg =
+ordinateTextField :  Model -> String -> String -> String -> (String -> Msg) -> (Int -> Msg) -> Msg -> Html Msg
+ordinateTextField model field label value inputMsg keyMsg blurMsg =
     let
         index =
             "textfield-" ++ field
@@ -332,7 +366,7 @@ ordinateTextField model field label value inputMsg keyMsg =
         , Textfield.nativeControl
             [ Options.id (index ++ "-native")
             , Options.onFocus (SelectText field)
-            , Options.onBlur MapFly
+            , Options.onBlur blurMsg
             , Options.on "keydown" (D.map keyMsg keyCode)
             ]
         ]
@@ -366,8 +400,8 @@ view model =
         , div [ id "lonlat"
             , style "position" "absolute", style "bottom" "0"
             ]
-            [ ordinateTextField model "lon" "Lengtegraad" model.lon Lon LonKey
-            , ordinateTextField model "lat" "Breedtegraad" model.lat Lat LatKey
+            [ ordinateTextField model "lon" "Lengtegraad" model.lon Lon LonKey LonBlur
+            , ordinateTextField model "lat" "Breedtegraad" model.lat Lat LatKey LatBlur
             ]
         , div [ id "map"
             , style "position" "absolute", style "top" "0"
