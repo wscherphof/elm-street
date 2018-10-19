@@ -100,11 +100,8 @@ floatFormat input =
             if List.length parts == 2
             && String.length last > 5 then
                 let
-                    absFloat =
-                        abs float
-
                     fraction =
-                        absFloat - toFloat (floor absFloat)
+                        String.toFloat ("0." ++ last) |> Maybe.withDefault 0
 
                     decimals =
                         String.fromInt <| round (fraction * 100000)
@@ -240,6 +237,7 @@ type Msg
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
     | SelectText String
+    
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
