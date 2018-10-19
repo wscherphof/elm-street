@@ -209,8 +209,7 @@ updateField field maybeOld maybeNew model =
     { model | fields =
         Dict.update field (\maybeValue ->
             case maybeValue of
-                Nothing ->
-                    Just <| FieldModel "" ""
+                Nothing -> Nothing
             
                 Just value ->
                     Just { value
@@ -285,7 +284,11 @@ update msg model =
                     else
                        latLon model
             in
-            ( model |> updateField field (Just text) (Just text), cmd )
+            if text == "" then
+                ( model |> updateField field Nothing (Just fieldModel.old), Cmd.none )
+
+            else
+                ( model |> updateField field (Just text) (Just text), cmd )
 
         PlaceBlur ->
             let
@@ -294,6 +297,9 @@ update msg model =
             in
             if fieldModel.new == fieldModel.old then
                 ( model, Cmd.none )
+            
+            else if fieldModel.new == "" then
+                ( model |> updateField "place" Nothing (Just fieldModel.old), geocode fieldModel.new )
             
             else
                 ( model |> updateField "place" (Just fieldModel.new) Nothing, geocode fieldModel.new )
