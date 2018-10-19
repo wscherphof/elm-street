@@ -19,7 +19,9 @@ registerServiceWorker();
     function selectText(id) {
       var element = document.getElementById(id);
       if (element && element.select) {
-        element.select();
+        setTimeout(function(){
+          element.setSelectionRange(0, 9999);
+        }, 100);
       }
     }
   });
