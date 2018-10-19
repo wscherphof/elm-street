@@ -3,7 +3,7 @@ port module Main exposing (..)
 import Browser
 import Browser.Dom as Dom
 import Task
-import Array
+import List.Extra as List
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -18,7 +18,7 @@ import Material.Icon as Icon
 import Json.Encode as E
 import Http
 import Json.Decode as D
-import Json.Decode.Extra as DE
+import Json.Decode.Extra as D
 import Url.Builder as Url
 
 
@@ -35,8 +35,8 @@ type alias PlaceModel =
 placeDecoder : D.Decoder PlaceModel
 placeDecoder =
     D.map3 PlaceModel
-        (D.field "lon" DE.parseFloat)
-        (D.field "lat" DE.parseFloat)
+        (D.field "lon" D.parseFloat)
+        (D.field "lat" D.parseFloat)
         (D.field "display_name" D.string)
 
 
@@ -89,10 +89,16 @@ floatFormat input =
         Just float ->
             let
                 parts =
-                    Array.fromList (String.split "." input)
+                    String.split "." input
+                
+                first =
+                    Maybe.withDefault "" (List.head parts)
+                
+                last =
+                    Maybe.withDefault "" (List.last parts)
             in
-            if Array.length parts == 2
-            && String.length (Maybe.withDefault "" (Array.get 1 parts)) > 5 then
+            if List.length parts == 2
+            && String.length last > 5 then
                 let
                     absFloat =
                         abs float
@@ -103,7 +109,7 @@ floatFormat input =
                     decimals =
                         String.fromInt (round (fraction * 100000))
                 in
-                (Maybe.withDefault "" (Array.get 0 parts)) ++ "." ++ decimals
+                first ++ "." ++ decimals
             
             else
                 input
@@ -227,8 +233,8 @@ type Msg
     | NoOp
     | FieldInput String String
     | FieldKey String Int
-    | FloatBlur String
-    | TextBlur String
+    | LatLonBlur String
+    | PlaceBlur
     | MapCenter Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
@@ -265,30 +271,33 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        FloatBlur field ->
+        LatLonBlur field ->
             let
                 fieldModel =
                     getField field model
 
                 text =
                     floatFormat fieldModel.new
+                
+                cmd =
+                    if fieldModel.old == text then
+                       Cmd.none
+                    
+                    else
+                       latLon model
             in
-            if fieldModel.old == text then
-                ( updateField field Nothing (Just text) model, Cmd.none )
-            
-            else
-                ( updateField field (Just text) (Just text) model, latLon model )
+            ( updateField field (Just text) (Just text) model, cmd )
 
-        TextBlur field ->
+        PlaceBlur ->
             let
                 fieldModel =
-                    getField field model
+                    getField "place" model
             in
             if fieldModel.new == fieldModel.old then
                 ( model, Cmd.none )
             
             else
-                ( updateField field (Just fieldModel.new) Nothing model, geocode fieldModel.new )
+                ( updateField "place" (Just fieldModel.new) Nothing model, geocode fieldModel.new )
 
         MapCenter coordinate ->
             let
@@ -364,7 +373,7 @@ ordinateTextField model field label =
         , Textfield.nativeControl
             [ Options.id (index ++ "-native")
             , Options.onFocus (SelectText field)
-            , Options.onBlur (FloatBlur field)
+            , Options.onBlur (LatLonBlur field)
             , Options.on "keydown" (D.map (FieldKey field) keyCode)
             ]
         ]
@@ -391,7 +400,7 @@ view model =
                     [ Options.id "textfield-place-native"
                     , Options.onFocus (SelectText "place")
                     , Options.on "keydown" (D.map (FieldKey "place") keyCode)
-                    , Options.onBlur (TextBlur "place")
+                    , Options.onBlur PlaceBlur
                     ]
                 ] []
             ]

@@ -17,6 +17,7 @@
             "elm/svg": "1.0.1",
             "elm/url": "1.0.0",
             "elm-community/json-extra": "4.0.0",
+            "elm-community/list-extra": "8.1.0",
             "elm-explorations/markdown": "1.0.0",
             "truqu/elm-md5": "1.1.0"
         },
@@ -35,6 +36,5 @@
         "indirect": {
             "elm/random": "1.0.0"
         }
-    },
-    "homepage": "https://wscherphof.github.io/elm-map-demo"
+    }
 }
