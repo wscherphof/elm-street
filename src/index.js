@@ -33,6 +33,14 @@ registerServiceWorker();
         break;
     }
   });
+
+  function mapCenter(coordinate, there) {
+    app.ports.mapCenter.send({
+      lon: coordinate[0],
+      lat: coordinate[1],
+      there: there
+    });
+  }
   
   const flyTime = 2000;
   function fly(lon, lat) {
@@ -56,16 +64,18 @@ registerServiceWorker();
     }
   }
   
+  function singleclick(event) {
+    var coordinate = ol.proj.toLonLat(event.coordinate);
+    mapCenter(coordinate, false);
+  }
+  
   var elmMove = false;
-  function moveend(){
+  function moveend() {
     if (elmMove) {
       elmMove = false;
     } else {
       var coordinate = ol.proj.toLonLat(getMap().getView().getCenter());
-      app.ports.mapCenter.send({
-        lon: coordinate[0],
-        lat: coordinate[1]
-      });
+      mapCenter(coordinate, true);
     }
   }
 
@@ -84,6 +94,7 @@ registerServiceWorker();
             zoom: 15
         })
       });
+      _map.on('singleclick', singleclick);
       _map.on('moveend', moveend);
     }
     return _map;

@@ -153,6 +153,7 @@ init =
 type alias Coordinate =
     { lon : Float
     , lat : Float
+    , there : Bool
     }
 
 
@@ -312,10 +313,21 @@ update msg model =
                 ( model, Cmd.none )
             
             else
+                let
+                    cmd =
+                        if coordinate.there then
+                            Cmd.none
+                        
+                        else
+                            mapFly (Just coordinate.lon) (Just coordinate.lat)
+                in
                 ( model
                     |> updateField "lat" (Just lat) (Just lat)
                     |> updateField "lon" (Just lon) (Just lon)
-                , reverseGeocode (Just coordinate.lon) (Just coordinate.lat) )
+                , Cmd.batch
+                    [ cmd
+                    , reverseGeocode (Just coordinate.lon) (Just coordinate.lat)
+                    ] )
                                 
         Geocode result ->
             case result of
