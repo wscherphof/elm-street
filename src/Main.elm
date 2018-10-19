@@ -199,7 +199,7 @@ latLon model =
             (getField "lat" model).new
     in
     Cmd.batch
-        [ mapFlyLong (String.toFloat lon) (String.toFloat lat)
+        [ mapFly (String.toFloat lon) (String.toFloat lat)
         , reverseGeocode (String.toFloat lon) (String.toFloat lat)
         ]
 
@@ -323,7 +323,7 @@ update msg model =
                             Cmd.none
                         
                         else
-                            mapFlyShort (Just coordinate.lon) (Just coordinate.lat)
+                            mapPan (Just coordinate.lon) (Just coordinate.lat)
                 in
                 ( model
                     |> updateField "lat" (Just lat) (Just lat)
@@ -352,7 +352,7 @@ update msg model =
                                 |> updateField "lat" (Just lat) (Just lat)
                                 |> updateField "lon" (Just lon) (Just lon)
                                 |> updateField "place" (Just place.displayName) (Just place.displayName)
-                            , mapFlyLong (Just place.lon) (Just place.lat) )
+                            , mapFly (Just place.lon) (Just place.lat) )
 
                 Err err ->
                     model |> toast (httpErrorMessage err "geocoderen")
@@ -472,18 +472,18 @@ port mapCenter : (Coordinate -> msg) -> Sub msg
 port map : E.Value -> Cmd msg
 
 
-mapFlyShort : (Maybe Float) -> (Maybe Float) -> Cmd msg
-mapFlyShort maybeLon maybeLat =
-    250 |> mapFly maybeLon maybeLat
+mapPan : (Maybe Float) -> (Maybe Float) -> Cmd msg
+mapPan maybeLon maybeLat =
+    "Pan" |> mapMove 300 maybeLon maybeLat
 
 
-mapFlyLong : (Maybe Float) -> (Maybe Float) -> Cmd msg
-mapFlyLong maybeLon maybeLat =
-    2000 |> mapFly maybeLon maybeLat
+mapFly : (Maybe Float) -> (Maybe Float) -> Cmd msg
+mapFly maybeLon maybeLat =
+    "Fly" |> mapMove 2000 maybeLon maybeLat
 
 
-mapFly : (Maybe Float) -> (Maybe Float) -> Int -> Cmd msg
-mapFly maybeLon maybeLat duration =
+mapMove : Int -> (Maybe Float) -> (Maybe Float) -> String -> Cmd msg
+mapMove duration maybeLon maybeLat cmd =
     case maybeLon of
         Nothing ->
             Cmd.none
@@ -495,7 +495,7 @@ mapFly maybeLon maybeLat duration =
                 
                 Just lat ->
                     map (E.object
-                        [ ("Cmd", E.string "Fly")
+                        [ ("Cmd", E.string cmd)
                         , ("lon", E.float lon)
                         , ("lat", E.float lat)
                         , ("duration", E.int duration)

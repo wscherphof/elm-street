@@ -33,6 +33,10 @@ registerServiceWorker();
       case 'Fly':
         fly(msg.lon, msg.lat, msg.duration);
         break;
+
+      case 'Pan':
+        fly(msg.lon, msg.lat, msg.duration, true);
+        break;
     }
   });
 
@@ -44,7 +48,7 @@ registerServiceWorker();
     });
   }
   
-  function fly(lon, lat, duration) {
+  function fly(lon, lat, duration, skipZoom) {
     var coordinate = ol.proj.fromLonLat([lon, lat]);
     var view = getMap().getView();
     var width = getMap().getSize()[0];
@@ -54,14 +58,16 @@ registerServiceWorker();
         center: coordinate,
         duration: duration
       });
-      var zoom = view.getZoom();
-      view.animate({
-        zoom: zoom - 1,
-        duration: duration / 2
-      }, {
-        zoom: zoom,
-        duration: duration / 2
-      });
+      if (!skipZoom) {
+        var zoom = view.getZoom();
+        view.animate({
+          zoom: zoom - 1,
+          duration: duration / 2
+        }, {
+          zoom: zoom,
+          duration: duration / 2
+        });
+        }
     }
   }
   
