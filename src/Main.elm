@@ -441,6 +441,10 @@ view model =
             , style "position" "absolute", style "top" "0"
             , style "width" "100%", style "height" "100%"
             , style "z-index" "-1"
+            , style "background-image" "url('./logo.svg')"
+            , style "background-position" "center center"
+            , style "background-repeat" "no-repeat"
+            , style "background-size" "30% 30%"
             ] []
         , Icon.view [ Options.id "icon-visor"
             , Options.css "position" "absolute"
