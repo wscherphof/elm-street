@@ -347,7 +347,12 @@ update msg model =
                     ( updateField "place" (Just place.displayName) (Just place.displayName) model, Cmd.none )
 
                 Err err ->
-                    toast model (httpErrorMessage err "omgekeerd geocoderen")
+                    case err of
+                        Http.BadPayload message _ ->
+                            ( updateField "place" (Just "") (Just "") model, Cmd.none )
+                        
+                        _ ->
+                            toast model (httpErrorMessage err "omgekeerd geocoderen")
 
         SelectText field  ->
             ( model, selectText ("textfield-" ++ field ++ "-native") )
