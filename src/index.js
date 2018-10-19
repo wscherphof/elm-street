@@ -29,7 +29,7 @@ registerServiceWorker();
   app.ports.map.subscribe(function(msg) {
     switch (msg.Cmd) {
       case 'Fly':
-        fly(msg.lon, msg.lat);
+        fly(msg.lon, msg.lat, msg.duration);
         break;
     }
   });
@@ -42,8 +42,7 @@ registerServiceWorker();
     });
   }
   
-  const flyTime = 2000;
-  function fly(lon, lat) {
+  function fly(lon, lat, duration) {
     var coordinate = ol.proj.fromLonLat([lon, lat]);
     var view = getMap().getView();
     var width = getMap().getSize()[0];
@@ -51,15 +50,15 @@ registerServiceWorker();
       elmMove = true;
       view.animate({
         center: coordinate,
-        duration: flyTime
+        duration: duration
       });
       var zoom = view.getZoom();
       view.animate({
         zoom: zoom - 1,
-        duration: flyTime / 2
+        duration: duration / 2
       }, {
         zoom: zoom,
-        duration: flyTime / 2
+        duration: duration / 2
       });
     }
   }

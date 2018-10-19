@@ -202,7 +202,7 @@ latLon model =
             (getField "lat" model).new
     in
     Cmd.batch
-        [ mapFly (String.toFloat lon) (String.toFloat lat)
+        [ mapFlyLong (String.toFloat lon) (String.toFloat lat)
         , reverseGeocode (String.toFloat lon) (String.toFloat lat)
         ]
 
@@ -314,18 +314,18 @@ update msg model =
             
             else
                 let
-                    cmd =
+                    fly =
                         if coordinate.there then
                             Cmd.none
                         
                         else
-                            mapFly (Just coordinate.lon) (Just coordinate.lat)
+                            mapFlyShort (Just coordinate.lon) (Just coordinate.lat)
                 in
                 ( model
                     |> updateField "lat" (Just lat) (Just lat)
                     |> updateField "lon" (Just lon) (Just lon)
                 , Cmd.batch
-                    [ cmd
+                    [ fly
                     , reverseGeocode (Just coordinate.lon) (Just coordinate.lat)
                     ] )
                                 
@@ -348,7 +348,7 @@ update msg model =
                                 |> updateField "lat" (Just lat) (Just lat)
                                 |> updateField "lon" (Just lon) (Just lon)
                                 |> updateField "place" (Just place.displayName) (Just place.displayName)
-                            , mapFly (Just place.lon) (Just place.lat) )
+                            , mapFlyLong (Just place.lon) (Just place.lat) )
 
                 Err err ->
                     model |> toast (httpErrorMessage err "geocoderen")
@@ -467,8 +467,18 @@ port mapCenter : (Coordinate -> msg) -> Sub msg
 port map : E.Value -> Cmd msg
 
 
-mapFly : (Maybe Float) -> (Maybe Float) -> Cmd msg
-mapFly maybeLon maybeLat =
+mapFlyShort : (Maybe Float) -> (Maybe Float) -> Cmd msg
+mapFlyShort maybeLon maybeLat =
+    250 |> mapFly maybeLon maybeLat
+
+
+mapFlyLong : (Maybe Float) -> (Maybe Float) -> Cmd msg
+mapFlyLong maybeLon maybeLat =
+    2000 |> mapFly maybeLon maybeLat
+
+
+mapFly : (Maybe Float) -> (Maybe Float) -> Int -> Cmd msg
+mapFly maybeLon maybeLat duration =
     case maybeLon of
         Nothing ->
             Cmd.none
@@ -483,6 +493,7 @@ mapFly maybeLon maybeLat =
                         [ ("Cmd", E.string "Fly")
                         , ("lon", E.float lon)
                         , ("lat", E.float lat)
+                        , ("duration", E.int duration)
                         ]
                     )
 
