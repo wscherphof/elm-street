@@ -361,6 +361,11 @@ update msg model =
 ---- VIEW ----
 
 
+whiteTransparentBackground : Options.Property c m
+whiteTransparentBackground =
+    Options.css "background-color" "rgba(255, 255, 255, 0.77)"
+
+
 ordinateTextField :  Model -> String -> String -> Html Msg
 ordinateTextField model field label =
     let
@@ -372,7 +377,7 @@ ordinateTextField model field label =
         , Textfield.value (getField field model).new
         , Textfield.box
         , Textfield.pattern "-?\\d\\d?\\d?\\.?\\d*"
-        , Options.css "background-color" "rgba(255, 255, 255, 0.77)"
+        , whiteTransparentBackground
         , Options.css "margin-left" ".5em"
         , Options.onInput (FieldInput field)
         , Textfield.nativeControl
@@ -398,7 +403,7 @@ view model =
                 , Textfield.value (getField "place" model).new
                 , Textfield.fullwidth
                 -- , Textfield.trailingIcon "cancel"
-                , Options.css "background-color" "rgba(255, 255, 255, 0.77)"
+                , whiteTransparentBackground
                 , Options.css "padding" "0 1em"
                 , Options.onInput (FieldInput "place")
                 , Textfield.nativeControl
