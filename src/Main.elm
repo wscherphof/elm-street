@@ -50,7 +50,7 @@ geocodeUrl q =
 
 geocode : String -> Cmd Msg
 geocode q =
-    Http.send Geocode (Http.get (geocodeUrl q) (D.list placeDecoder)) 
+    Http.send Geocode <| Http.get (geocodeUrl q) (D.list placeDecoder)
 
 
 reverseUrl : Float -> Float -> String
@@ -74,7 +74,7 @@ reverseGeocode maybeLon maybeLat =
                     Cmd.none
             
                 Just lat ->
-                    Http.send ReverseGeocode (Http.get (reverseUrl lon lat) placeDecoder) 
+                    Http.send ReverseGeocode <| Http.get (reverseUrl lon lat) placeDecoder
 
 
 ---- MODEL ----
@@ -107,7 +107,7 @@ floatFormat input =
                         absFloat - toFloat (floor absFloat)
 
                     decimals =
-                        String.fromInt (round (fraction * 100000))
+                        String.fromInt <| round (fraction * 100000)
                 in
                 first ++ "." ++ decimals
             
@@ -250,7 +250,7 @@ update msg model =
             ( model, Cmd.none )
         
         FieldInput field input ->
-            ( updateField field Nothing (Just input) model, Cmd.none )
+            ( model |> updateField field Nothing (Just input), Cmd.none )
         
         FieldKey field code ->
             let
@@ -266,7 +266,7 @@ update msg model =
                         old =
                             (getField field model).old
                     in
-                    ( updateField field Nothing (Just old) model, blur id )
+                    ( model |> updateField field Nothing (Just old), blur id )
                 
                 _ ->
                     ( model, Cmd.none )
@@ -286,7 +286,7 @@ update msg model =
                     else
                        latLon model
             in
-            ( updateField field (Just text) (Just text) model, cmd )
+            ( model |> updateField field (Just text) (Just text), cmd )
 
         PlaceBlur ->
             let
@@ -297,7 +297,7 @@ update msg model =
                 ( model, Cmd.none )
             
             else
-                ( updateField "place" (Just fieldModel.new) Nothing model, geocode fieldModel.new )
+                ( model |> updateField "place" (Just fieldModel.new) Nothing, geocode fieldModel.new )
 
         MapCenter coordinate ->
             let
@@ -312,9 +312,10 @@ update msg model =
                 ( model, Cmd.none )
             
             else
-                ( updateField "lat" (Just lat) (Just lat) (
-                    updateField "lon" (Just lon) (Just lon) model
-                ), reverseGeocode (Just coordinate.lon) (Just coordinate.lat) )
+                ( model
+                    |> updateField "lat" (Just lat) (Just lat)
+                    |> updateField "lon" (Just lon) (Just lon)
+                , reverseGeocode (Just coordinate.lon) (Just coordinate.lat) )
                                 
         Geocode result ->
             case result of
@@ -331,11 +332,11 @@ update msg model =
                                 lat =
                                     floatFormat (String.fromFloat place.lat)
                             in
-                            ( updateField "lat" (Just lat) (Just lat) (
-                                updateField "lon" (Just lon) (Just lon) (
-                                    updateField "place" (Just place.displayName) (Just place.displayName) model
-                                )
-                            ), mapFly (Just place.lon) (Just place.lat) )
+                            ( model
+                                |> updateField "lat" (Just lat) (Just lat)
+                                |> updateField "lon" (Just lon) (Just lon)
+                                |> updateField "place" (Just place.displayName) (Just place.displayName)
+                            , mapFly (Just place.lon) (Just place.lat) )
 
                 Err err ->
                     toast model (httpErrorMessage err "geocoderen")
@@ -344,12 +345,12 @@ update msg model =
         ReverseGeocode result ->
             case result of
                 Ok place ->
-                    ( updateField "place" (Just place.displayName) (Just place.displayName) model, Cmd.none )
+                    ( model |> updateField "place" (Just place.displayName) (Just place.displayName), Cmd.none )
 
                 Err err ->
                     case err of
                         Http.BadPayload _ _ ->
-                            ( updateField "place" (Just "") (Just "") model, Cmd.none )
+                            ( model |> updateField "place" (Just "") (Just ""), Cmd.none )
                         
                         _ ->
                             toast model (httpErrorMessage err "omgekeerd geocoderen")
