@@ -446,6 +446,7 @@ view model =
             , Options.css "position" "absolute"
             , Options.css "top" "50%", Options.css "left" "50%"
             , Options.css "transform" "translate(-50%, -50%)"
+            , Options.css "user-select" "none"
             ] "gps_not_fixed"
         , Snackbar.view Mdc "my-snackbar" model.mdc [] []
         ]
