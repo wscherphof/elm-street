@@ -56,8 +56,8 @@ geocode q =
 reverseUrl : Float -> Float -> String
 reverseUrl lon lat = 
     Url.crossOrigin "https://nominatim.openstreetmap.org" ["reverse"]
-        [ Url.string "lon" (String.fromFloat lon)
-        , Url.string "lat" (String.fromFloat lat)
+        [ Url.string "lon" <| String.fromFloat lon
+        , Url.string "lat" <| String.fromFloat lat
         , Url.string "format" "json"
         ]
 
@@ -157,8 +157,8 @@ type alias Coordinate =
     }
 
 
-toast : Model -> String -> ( Model, Cmd Msg )
-toast model message =
+toast : String -> Model -> ( Model, Cmd Msg )
+toast message model =
     let
         contents =
             Snackbar.toast Nothing message
@@ -213,7 +213,7 @@ updateField field maybeOld maybeNew model =
         Dict.update field (\maybeValue ->
             case maybeValue of
                 Nothing ->
-                    Just (FieldModel "" "")
+                    Just <| FieldModel "" ""
             
                 Just value ->
                     Just { value
@@ -303,10 +303,10 @@ update msg model =
         MapCenter coordinate ->
             let
                 lon =
-                    floatFormat (String.fromFloat coordinate.lon)
+                    floatFormat <| String.fromFloat coordinate.lon
 
                 lat =
-                    floatFormat (String.fromFloat coordinate.lat)
+                    floatFormat <| String.fromFloat coordinate.lat
             in
             if lon == (getField "lon" model).new
             && lat == (getField "lat" model).new then
@@ -339,10 +339,10 @@ update msg model =
                         Just place ->
                             let
                                 lon =
-                                    floatFormat (String.fromFloat place.lon)
+                                    floatFormat <| String.fromFloat place.lon
 
                                 lat =
-                                    floatFormat (String.fromFloat place.lat)
+                                    floatFormat <| String.fromFloat place.lat
                             in
                             ( model
                                 |> updateField "lat" (Just lat) (Just lat)
@@ -351,7 +351,7 @@ update msg model =
                             , mapFly (Just place.lon) (Just place.lat) )
 
                 Err err ->
-                    toast model (httpErrorMessage err "geocoderen")
+                    model |> toast (httpErrorMessage err "geocoderen")
                     
         
         ReverseGeocode result ->
@@ -365,10 +365,10 @@ update msg model =
                             ( model |> updateField "place" (Just "") (Just ""), Cmd.none )
                         
                         _ ->
-                            toast model (httpErrorMessage err "omgekeerd geocoderen")
+                            model |> toast (httpErrorMessage err "omgekeerd geocoderen")
 
         SelectText field  ->
-            ( model, selectText ("textfield-" ++ field ++ "-native") )
+            ( model, selectText <| "textfield-" ++ field ++ "-native" )
 
 
 ---- VIEW ----
