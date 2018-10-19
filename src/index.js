@@ -8,7 +8,7 @@ var app = Elm.Main.init({
 
 registerServiceWorker();
 
-(function dom() {
+(function port_dom() {
   app.ports.dom.subscribe(function(msg) {
     switch (msg.Cmd) {
       case 'SelectText':
@@ -27,7 +27,7 @@ registerServiceWorker();
   });
 })();
 
-(function map() {
+(function port_map() {
   app.ports.map.subscribe(function(msg) {
     switch (msg.Cmd) {
       case 'Fly':
@@ -101,3 +101,8 @@ registerServiceWorker();
     return _map;
   }
 })();
+
+// keep touching the icon from scrolling the app
+document.getElementById('icon-visor').addEventListener('touchmove', function(event) {
+  event.preventDefault();
+});
