@@ -92,10 +92,10 @@ floatFormat input =
                     String.split "." input
                 
                 first =
-                    Maybe.withDefault "" (List.head parts)
+                    List.head parts |> Maybe.withDefault ""
                 
                 last =
-                    Maybe.withDefault "" (List.last parts)
+                    List.last parts |> Maybe.withDefault ""
             in
             if List.length parts == 2
             && String.length last > 5 then
@@ -216,8 +216,8 @@ updateField field maybeOld maybeNew model =
             
                 Just value ->
                     Just { value
-                        | old = Maybe.withDefault value.old maybeOld
-                        , new = Maybe.withDefault value.new maybeNew
+                        | old = maybeOld |> Maybe.withDefault value.old
+                        , new = maybeNew |> Maybe.withDefault value.new
                     }
         ) model.fields
     }
@@ -225,7 +225,7 @@ updateField field maybeOld maybeNew model =
 
 getField : String -> Model -> FieldModel
 getField field model =
-    Maybe.withDefault (FieldModel "" "") (Dict.get field model.fields)
+    Dict.get field model.fields |> Maybe.withDefault (FieldModel "" "")
 
 
 type Msg
