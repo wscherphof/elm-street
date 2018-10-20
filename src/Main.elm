@@ -230,8 +230,8 @@ type Msg
     | NoOp
     | FieldInput String String
     | FieldKey String Int
-    | LatLonBlur String
-    | PlaceBlur
+    | Ordinate String
+    | Place
     | MapCenter Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
@@ -269,7 +269,7 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        LatLonBlur field ->
+        Ordinate field ->
             let
                 fieldModel =
                     getField field model
@@ -290,7 +290,7 @@ update msg model =
             else
                 ( model |> updateField field (Just text) (Just text), cmd )
 
-        PlaceBlur ->
+        Place ->
             let
                 fieldModel =
                     getField "place" model
@@ -318,7 +318,7 @@ update msg model =
             
             else
                 let
-                    fly =
+                    pan =
                         if coordinate.there then
                             Cmd.none
                         
@@ -329,7 +329,7 @@ update msg model =
                     |> updateField "lat" (Just lat) (Just lat)
                     |> updateField "lon" (Just lon) (Just lon)
                 , Cmd.batch
-                    [ fly
+                    [ pan
                     , reverseGeocode (Just coordinate.lon) (Just coordinate.lat)
                     ] )
                                 
@@ -383,8 +383,8 @@ whiteTransparentBackground =
     Options.css "background-color" "rgba(255, 255, 255, 0.77)"
 
 
-ordinateTextField :  Model -> String -> String -> Html Msg
-ordinateTextField model field label =
+ordinateTextField : String -> String -> Model -> Html Msg
+ordinateTextField field label model =
     let
         index =
             "textfield-" ++ field
@@ -400,7 +400,7 @@ ordinateTextField model field label =
         , Textfield.nativeControl
             [ Options.id (index ++ "-native")
             , Options.onFocus (SelectText field)
-            , Options.onBlur (LatLonBlur field)
+            , Options.onBlur (Ordinate field)
             , Options.on "keydown" (D.map (FieldKey field) keyCode)
             ]
         ]
@@ -426,16 +426,16 @@ view model =
                 , Textfield.nativeControl
                     [ Options.id "textfield-place-native"
                     , Options.onFocus (SelectText "place")
-                    , Options.on "keydown" (D.map (FieldKey "place") keyCode)
-                    , Options.onBlur PlaceBlur
+                    , Options.on "keydown" <| D.map (FieldKey "place") keyCode
+                    , Options.onBlur Place
                     ]
                 ] []
             ]
         , div [ id "lonlat"
             , style "position" "absolute", style "bottom" "0"
             ]
-            [ ordinateTextField model "lon" "Lengtegraad"
-            , ordinateTextField model "lat" "Breedtegraad"
+            [ ordinateTextField "lon" "Lengtegraad" model
+            , ordinateTextField "lat" "Breedtegraad" model
             ]
         , div [ id "map"
             , style "position" "absolute", style "top" "0"
