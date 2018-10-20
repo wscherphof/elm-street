@@ -77,7 +77,77 @@ reverseGeocode maybeLon maybeLat =
                     Http.send ReverseGeocode <| Http.get (reverseUrl lon lat) placeDecoder
 
 
+httpErrorMessage : Http.Error -> String -> String
+httpErrorMessage err base =
+    case err of
+        Http.BadUrl url ->
+            "Ongeldige url bij " ++ base ++ " " ++ url
+
+        Http.Timeout ->
+            "Timeout bij " ++ base
+
+        Http.NetworkError ->
+            "Netwerkfout bij " ++ base
+
+        Http.BadStatus response ->
+            "Foutcode " ++ (String.fromInt response.status.code) ++ " bij " ++ base ++ ": " ++ response.status.message
+
+        Http.BadPayload message _ ->
+            "Datafout bij " ++ base ++ ": " ++ message
+
+
 ---- MODEL ----
+
+
+type alias FieldModel =
+    { old : String
+    , new : String
+    , transform : (String -> String)
+    }
+
+
+getField : String -> Model -> FieldModel
+getField field model =
+    Dict.get field model.fields |> Maybe.withDefault defaultFieldModel
+
+
+updateField : String -> Maybe String -> Maybe String -> Model -> Model
+updateField field maybeOld maybeNew model =
+    { model | fields = model.fields |>
+        Dict.update field (\maybeFieldModel ->
+            case maybeFieldModel of
+                Nothing ->
+                    Nothing
+            
+                Just fieldModel ->
+                    Just { fieldModel
+                        | old = maybeOld |> Maybe.withDefault fieldModel.old
+                        , new = maybeNew |> Maybe.withDefault fieldModel.new
+                        }
+        )
+    }
+
+
+defaultFieldModel : FieldModel
+defaultFieldModel =
+    FieldModel "" "" (\v -> v)
+
+
+type alias Model =
+    { mdc : Material.Model Msg
+    , fields : Dict String FieldModel
+    }
+
+
+defaultModel : Model
+defaultModel =
+    { mdc = Material.defaultModel
+    , fields = Dict.fromList
+        [ ("lon", FieldModel "" "" floatFormat)
+        , ("lat", FieldModel "" "" floatFormat)
+        , ("place", defaultFieldModel)
+        ]
+    }
 
 
 floatFormat : String -> String
@@ -112,29 +182,6 @@ floatFormat input =
                 input
 
 
-type alias FieldModel =
-    { old : String
-    , new : String
-    }
-
-
-type alias Model =
-    { mdc : Material.Model Msg
-    , fields : Dict String FieldModel
-    }
-
-
-defaultModel : Model
-defaultModel =
-    { mdc = Material.defaultModel
-    , fields = Dict.fromList
-        [ ("lon", FieldModel "" "")
-        , ("lat", FieldModel "" "")
-        , ("place", FieldModel "" "")
-        ]
-    }
-
-
 init : ( Model, Cmd Msg )
 init =
     ( defaultModel, Cmd.batch
@@ -145,13 +192,6 @@ init =
 
 
 ---- UPDATE ----
-
-
-type alias Coordinate =
-    { lon : Float
-    , lat : Float
-    , there : Bool
-    }
 
 
 toast : String -> Model -> ( Model, Cmd Msg )
@@ -165,77 +205,59 @@ toast message model =
         ( { model | mdc = mdc }, effects )
 
 
-httpErrorMessage : Http.Error -> String -> String
-httpErrorMessage err base =
-    case err of
-        Http.BadUrl url ->
-            "Ongeldige url bij " ++ base ++ " " ++ url
-
-        Http.Timeout ->
-            "Timeout bij " ++ base
-
-        Http.NetworkError ->
-            "Netwerkfout bij " ++ base
-
-        Http.BadStatus response ->
-            "Foutcode " ++ (String.fromInt response.status.code) ++ " bij " ++ base ++ ": " ++ response.status.message
-
-        Http.BadPayload message _ ->
-            "Datafout bij " ++ base ++ ": " ++ message
-
-
 blur : String -> Cmd Msg
 blur id =
     Task.attempt (\_ -> NoOp) (Dom.blur id)
 
 
-latLon : Model -> Cmd Msg
-latLon model =
+lonLatCmd : String -> String -> Cmd Msg
+lonLatCmd lon lat =
     let
-        lon =
-            (getField "lon" model).new
+        maybeLon =
+            String.toFloat lon
 
-        lat =
-            (getField "lat" model).new
+        maybeLat =
+            String.toFloat lat
     in
     Cmd.batch
-        [ mapFly (String.toFloat lon) (String.toFloat lat)
-        , reverseGeocode (String.toFloat lon) (String.toFloat lat)
+        [ mapFly maybeLon maybeLat
+        , reverseGeocode maybeLon maybeLat
         ]
 
 
-updateField : String -> Maybe String -> Maybe String -> Model -> Model
-updateField field maybeOld maybeNew model =
-    { model | fields =
-        Dict.update field (\maybeValue ->
-            case maybeValue of
-                Nothing -> Nothing
+fieldCmd : String -> String -> Model -> Cmd Msg
+fieldCmd field text model =
+    case field of
+        "lon" ->
+            lonLatCmd text (getField "lat" model).new
             
-                Just value ->
-                    Just { value
-                        | old = maybeOld |> Maybe.withDefault value.old
-                        , new = maybeNew |> Maybe.withDefault value.new
-                    }
-        ) model.fields
+        "lat" ->
+            lonLatCmd (getField "lon" model).new text
+            
+        "place" ->
+            geocode text
+        
+        _ ->
+            Cmd.none
+
+
+type alias Coordinate =
+    { lon : Float
+    , lat : Float
+    , there : Bool
     }
-
-
-getField : String -> Model -> FieldModel
-getField field model =
-    Dict.get field model.fields |> Maybe.withDefault (FieldModel "" "")
 
 
 type Msg
     = Mdc (Material.Msg Msg)
     | NoOp
+    | FieldFocus String
     | FieldInput String String
     | FieldKey String Int
-    | Ordinate String
-    | Place
+    | FieldBlur String
     | MapCenter Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
-    | SelectText String
     
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -246,6 +268,9 @@ update msg model =
         
         NoOp ->
             ( model, Cmd.none )
+
+        FieldFocus field  ->
+            ( model, selectText <| "textfield-" ++ field ++ "-native" )
         
         FieldInput field input ->
             ( model |> updateField field Nothing (Just input), Cmd.none )
@@ -269,40 +294,22 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        Ordinate field ->
+        FieldBlur field ->
             let
                 fieldModel =
                     getField field model
 
                 text =
-                    floatFormat fieldModel.new
-                
-                cmd =
-                    if fieldModel.old == text then
-                       Cmd.none
-                    
-                    else
-                       latLon model
+                    fieldModel.transform fieldModel.new
             in
             if text == "" then
                 ( model |> updateField field Nothing (Just fieldModel.old), Cmd.none )
 
-            else
-                ( model |> updateField field (Just text) (Just text), cmd )
+            else if text == fieldModel.old then
+                ( model |> updateField field Nothing (Just text), Cmd.none )
 
-        Place ->
-            let
-                fieldModel =
-                    getField "place" model
-            in
-            if fieldModel.new == fieldModel.old then
-                ( model, Cmd.none )
-            
-            else if fieldModel.new == "" then
-                ( model |> updateField "place" Nothing (Just fieldModel.old), geocode fieldModel.new )
-            
             else
-                ( model |> updateField "place" (Just fieldModel.new) Nothing, geocode fieldModel.new )
+                ( model |> updateField field (Just text) (Just text), fieldCmd field text model )
 
         MapCenter coordinate ->
             let
@@ -371,9 +378,6 @@ update msg model =
                         _ ->
                             model |> toast (httpErrorMessage err "omgekeerd geocoderen")
 
-        SelectText field  ->
-            ( model, selectText <| "textfield-" ++ field ++ "-native" )
-
 
 ---- VIEW ----
 
@@ -400,8 +404,8 @@ ordinateTextField field label model =
         , Textfield.nativeControl
             [ Options.id (index ++ "-native")
             , Options.attribute <| size 10
-            , Options.onFocus (SelectText field)
-            , Options.onBlur (Ordinate field)
+            , Options.onFocus (FieldFocus field)
+            , Options.onBlur (FieldBlur field)
             , Options.on "keydown" <| D.map (FieldKey field) keyCode
             ]
         ]
@@ -426,9 +430,9 @@ view model =
                 , Options.onInput (FieldInput "place")
                 , Textfield.nativeControl
                     [ Options.id "textfield-place-native"
-                    , Options.onFocus (SelectText "place")
+                    , Options.onFocus (FieldFocus "place")
                     , Options.on "keydown" <| D.map (FieldKey "place") keyCode
-                    , Options.onBlur Place
+                    , Options.onBlur (FieldBlur "place")
                     ]
                 ] []
             ]
