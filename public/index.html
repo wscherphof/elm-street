@@ -24,17 +24,18 @@
     <!-- OpenLayers -->
     <link rel="stylesheet" href="https://cdn.rawgit.com/openlayers/openlayers.github.io/master/en/v5.2.0/css/ol.css" type="text/css">
     <style>
-        .ol-control button {
-            width : 30px;
-            height : 30px;
-        }
         .ol-zoom {
             top : unset;
+            left : unset;
             bottom: .5em;
+            right: .5em;
+        }
+        .ol-attribution, .ol-rotate {
+            top : calc(.5em + .25em + 56px);
+            bottom: unset;
         }
         .ol-rotate {
-            top : unset;
-            bottom: calc(1em + 30px + 6px);
+            right: calc(.5em + 1.375em + 12px + .25em)
         }
     </style>
 </head>

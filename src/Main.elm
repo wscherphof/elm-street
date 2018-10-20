@@ -414,7 +414,7 @@ view model =
         [ div [ id "place"
             , style "position" "absolute"
             , style "top" ".5em", style "left" ".5em"
-            , style "width" "calc(100% - 1em)"
+            , style "width" "calc(100% - 1em - 3px)"
             ]
             [ Textfield.view Mdc "textfield-place" model.mdc
                 [ Textfield.label "Plek"
@@ -434,7 +434,7 @@ view model =
             ]
         , div [ id "lonlat"
             , style "position" "absolute"
-            , style "bottom" "3px", style "left" "calc(30px + 1em + 6px)"
+            , style "bottom" "0", style "left" ".5em"
             ]
             [ ordinateTextField "lon" "Lengtegraad" model
             , ordinateTextField "lat" "Breedtegraad" model
