@@ -402,7 +402,7 @@ ordinateTextField field label model =
             , Options.attribute <| size 10
             , Options.onFocus (SelectText field)
             , Options.onBlur (Ordinate field)
-            , Options.on "keydown" (D.map (FieldKey field) keyCode)
+            , Options.on "keydown" <| D.map (FieldKey field) keyCode
             ]
         ]
         []
