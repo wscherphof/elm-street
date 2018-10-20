@@ -395,12 +395,11 @@ ordinateTextField field label model =
         , Textfield.box
         , Textfield.pattern "-?\\d\\d?\\d?\\.?\\d*"
         , whiteTransparentBackground
-        , Options.css "margin-left" ".5em"
-        , Options.css "margin-bottom" "calc(.5em + 3px)"
+        , Options.css "margin-right" ".5em"
         , Options.onInput (FieldInput field)
         , Textfield.nativeControl
             [ Options.id (index ++ "-native")
-            , Options.attribute <| size 7
+            , Options.attribute <| size 10
             , Options.onFocus (SelectText field)
             , Options.onBlur (Ordinate field)
             , Options.on "keydown" (D.map (FieldKey field) keyCode)
@@ -435,7 +434,7 @@ view model =
             ]
         , div [ id "lonlat"
             , style "position" "absolute"
-            , style "bottom" "0", style "left" "calc(.5em + 1.375em + 6px)"
+            , style "bottom" "3px", style "left" "calc(30px + 1em + 6px)"
             ]
             [ ordinateTextField "lon" "Lengtegraad" model
             , ordinateTextField "lat" "Breedtegraad" model
