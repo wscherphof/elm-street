@@ -396,9 +396,11 @@ ordinateTextField field label model =
         , Textfield.pattern "-?\\d\\d?\\d?\\.?\\d*"
         , whiteTransparentBackground
         , Options.css "margin-left" ".5em"
+        , Options.css "margin-bottom" "calc(.5em + 3px)"
         , Options.onInput (FieldInput field)
         , Textfield.nativeControl
             [ Options.id (index ++ "-native")
+            , Options.attribute <| size 7
             , Options.onFocus (SelectText field)
             , Options.onBlur (Ordinate field)
             , Options.on "keydown" (D.map (FieldKey field) keyCode)
@@ -412,8 +414,8 @@ view model =
     div []
         [ div [ id "place"
             , style "position" "absolute"
-            , style "top" ".5em", style "left" "calc(.5em + 3px)"
-            , style "width" "calc(100% - 1em - 6px)"
+            , style "top" ".5em", style "left" ".5em"
+            , style "width" "calc(100% - 1em)"
             ]
             [ Textfield.view Mdc "textfield-place" model.mdc
                 [ Textfield.label "Plek"
@@ -432,7 +434,8 @@ view model =
                 ] []
             ]
         , div [ id "lonlat"
-            , style "position" "absolute", style "bottom" "0"
+            , style "position" "absolute"
+            , style "bottom" "0", style "left" "calc(.5em + 1.375em + 6px)"
             ]
             [ ordinateTextField "lon" "Lengtegraad" model
             , ordinateTextField "lat" "Breedtegraad" model
