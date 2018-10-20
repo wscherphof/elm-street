@@ -27,15 +27,17 @@
         .ol-zoom {
             top : unset;
             left : unset;
-            bottom: .5em;
-            right: .5em;
+            bottom: calc(.5em - 3px);
+        }
+        .ol-zoom, .ol-attribution {
+            right: calc(.5em - 3px);
         }
         .ol-attribution, .ol-rotate {
             top : calc(.5em + .25em + 56px);
             bottom: unset;
         }
         .ol-rotate {
-            right: calc(.5em + 1.375em + 12px + .25em)
+            right: calc(.5em - 3px + 1.375em + 6px + .5em)
         }
     </style>
 </head>
