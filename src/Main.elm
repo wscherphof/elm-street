@@ -104,6 +104,7 @@ type alias FieldModel =
     , saved : String
     , focused : Bool
     , transform : (String -> String)
+    , select : Bool
     }
 
 
@@ -182,7 +183,7 @@ focusField field focused model =
 
 defaultFieldModel : FieldModel
 defaultFieldModel =
-    FieldModel "" "" False (\v -> v)
+    FieldModel "" "" False (\v -> v) True
 
 
 type alias Model =
@@ -195,8 +196,8 @@ defaultModel : Model
 defaultModel =
     { mdc = Material.defaultModel
     , fields = Dict.fromList
-        [ ("lon", FieldModel "" "" False floatFormat)
-        , ("lat", FieldModel "" "" False floatFormat)
+        [ ("lon", FieldModel "" "" False floatFormat False)
+        , ("lat", FieldModel "" "" False floatFormat False)
         , ("place", defaultFieldModel)
         ]
     }
@@ -317,7 +318,10 @@ update msg model =
             ( model, Cmd.none )
 
         FieldFocus field ->
-            ( model |> focusField field True, selectText <| "textfield-" ++ field ++ "-native" )
+            ( model |> focusField field True
+            , if (getField field model).select
+                then selectText <| "textfield-" ++ field ++ "-native"
+                else Cmd.none )
         
         FieldKey field code ->
             let
