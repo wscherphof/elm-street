@@ -255,17 +255,14 @@ toast message model =
         ( mdc, effects ) =
             Snackbar.add Mdc "my-snackbar" contents model.mdc
     in
-        ( { model | mdc = mdc }, effects )
+    ( { model | mdc = mdc }, effects )
 
 
 lonLatCmd : String -> String -> Cmd Msg
 lonLatCmd lon lat =
     let
-        maybeLon =
-            String.toFloat lon
-
-        maybeLat =
-            String.toFloat lat
+        maybeLon = String.toFloat lon
+        maybeLat = String.toFloat lat
     in
     Cmd.batch
         [ mapFly maybeLon maybeLat
@@ -354,24 +351,18 @@ update msg model =
 
         MapCenter coordinate ->
             let
-                lon =
-                    floatFormat <| String.fromFloat coordinate.lon
-
-                lat =
-                    floatFormat <| String.fromFloat coordinate.lat
+                lon = floatFormat <| String.fromFloat coordinate.lon
+                lat = floatFormat <| String.fromFloat coordinate.lat
             in
             if lon == fieldValue "lon" model
-            && lat == fieldValue "lat" model then
-                ( model, Cmd.none )
+            && lat == fieldValue "lat" model
+                then ( model, Cmd.none )
             
             else
                 let
-                    pan =
-                        if coordinate.there then
-                            Cmd.none
-                        
-                        else
-                            mapPan (Just coordinate.lon) (Just coordinate.lat)
+                    pan = if coordinate.there
+                        then Cmd.none
+                        else mapPan (Just coordinate.lon) (Just coordinate.lat)
                 in
                 ( model
                     |> saveField "lat" lat
@@ -390,11 +381,8 @@ update msg model =
                             
                         Just place ->
                             let
-                                lon =
-                                    floatFormat <| String.fromFloat place.lon
-
-                                lat =
-                                    floatFormat <| String.fromFloat place.lat
+                                lon = floatFormat <| String.fromFloat place.lon
+                                lat = floatFormat <| String.fromFloat place.lat
                             in
                             ( model
                                 |> saveField "lat" lat
