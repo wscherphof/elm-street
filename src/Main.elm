@@ -10,6 +10,8 @@ import Browser
 import Browser.Dom as Dom
 import Browser.Navigation as Nav
 import Url
+import Url.Parser as Parser exposing (Parser, (</>), (<?>))
+import Url.Parser.Query as Query
 import Task
 import List.Extra as List
 import Dict exposing (Dict)
@@ -188,23 +190,6 @@ defaultFieldModel =
     FieldModel "" "" False (\v -> v) True
 
 
-type alias Model =
-    { mdc : Material.Model Msg
-    , fields : Dict String FieldModel
-    }
-
-
-defaultModel : Model
-defaultModel =
-    { mdc = Material.defaultModel
-    , fields = Dict.fromList
-        [ ("lon", FieldModel "" "" False floatFormat False)
-        , ("lat", FieldModel "" "" False floatFormat False)
-        , ("place", defaultFieldModel)
-        ]
-    }
-
-
 floatFormat : String -> String
 floatFormat input =
     case (String.toFloat input) of
@@ -237,14 +222,96 @@ floatFormat input =
                 input
 
 
+type alias Model =
+    { mdc : Material.Model Msg
+    , url : Url.Url
+    , key : Nav.Key
+    , fields : Dict String FieldModel
+    }
+
+
+defaultModel : Url.Url -> Nav.Key -> Model
+defaultModel url key =
+    { mdc = Material.defaultModel
+    , url = url
+    , key = key
+    , fields = Dict.fromList
+        [ ("lon", FieldModel "" "" False floatFormat False)
+        , ("lat", FieldModel "" "" False floatFormat False)
+        , ("place", defaultFieldModel)
+        ]
+    }
+
+
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( defaultModel, Cmd.batch
+    let
+        baseModel =
+            defaultModel url key
+
+        route =
+            Parser.parse routeParser url |> Maybe.withDefault Home
+
+        ( model, cmd ) =
+            case route of
+                Home ->
+                    ( baseModel, geocode "onze lieve vrouwetoren, amersfoort" )
+            
+                Search maybeQ ->
+                    case maybeQ of
+                        Nothing ->
+                            toast "Geen zoekopdracht gevonden" baseModel
+                    
+                        Just q ->
+                            ( baseModel, geocode q )
+            
+                Reverse maybeLon maybeLat ->
+                    case maybeLon of
+                        Nothing ->
+                            toast "Geen geldige lengtegraad" baseModel
+                    
+                        Just lon ->
+                            case maybeLat of
+                                Nothing ->
+                                    toast "Geen geldige breedtegraad" baseModel
+                            
+                                Just lat ->
+                                    ( baseModel, lonLatCmd (String.fromFloat lon) (String.fromFloat lat) )
+                      
+    in
+    ( model, Cmd.batch
         [ Material.init Mdc
-        , geocode "onze lieve vrouwetoren, amersfoort"
+        , cmd
         ]
     )
 
+
+---- ROUTES ----
+
+
+type Route
+    = Home
+    | Search (Maybe String)
+    | Reverse (Maybe Float) (Maybe Float)
+
+
+routeParser : Parser (Route -> a) a
+routeParser =
+    Parser.oneOf
+        [ Parser.map Home    (Parser.top)
+        , Parser.map Search  (Parser.s "search" <?> Query.string "q")
+        , Parser.map Reverse (Parser.s "reverse" <?> queryFloat "lon" <?> queryFloat "lat")
+        ]
+
+queryFloat : String -> Query.Parser (Maybe Float)
+queryFloat param =
+    Query.custom param <| \stringList ->
+        case stringList of
+            [str] ->
+                String.toFloat str
+
+            _ ->
+                Nothing
 
 ---- UPDATE ----
 
@@ -384,13 +451,9 @@ update msg model =
                             model |> toast "Niets gevonden"
                             
                         Just place ->
-                            let
-                                lon = floatFormat <| String.fromFloat place.lon
-                                lat = floatFormat <| String.fromFloat place.lat
-                            in
                             ( model
-                                |> saveField "lat" lat
-                                |> saveField "lon" lon
+                                |> saveField "lon" (floatFormat <| String.fromFloat place.lon)
+                                |> saveField "lat" (floatFormat <| String.fromFloat place.lat)
                                 |> saveField "place" place.displayName
                             , mapFly (Just place.lon) (Just place.lat) )
 
@@ -400,7 +463,11 @@ update msg model =
         ReverseGeocode result ->
             case result of
                 Ok place ->
-                    ( model |> saveField "place" place.displayName, Cmd.none )
+                    ( model
+                        |> saveField "lon" (floatFormat <| String.fromFloat place.lon)
+                        |> saveField "lat" (floatFormat <| String.fromFloat place.lat)
+                        |> saveField "place" place.displayName
+                    , Cmd.none )
 
                 Err err ->
                     case err of
@@ -410,11 +477,18 @@ update msg model =
                         _ ->
                             model |> toast (httpErrorMessage err "omgekeerd geocoderen")
         
-        UrlChange _ ->
-            ( model, Cmd.none )
+        UrlRequest urlRequest ->
+            case urlRequest of
+                Browser.Internal url ->
+                    ( model, Nav.pushUrl model.key (Url.toString url) )
 
-        UrlRequest _ ->
-            ( model, Cmd.none )
+                Browser.External href ->
+                    ( model, Nav.load href )
+
+        UrlChange url ->
+            ( { model | url = url }
+            , Cmd.none
+            )
 
 
 ---- VIEW ----
