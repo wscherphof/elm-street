@@ -100,9 +100,16 @@ httpErrorMessage err base =
 
 
 type alias FieldModel =
-    { value : String
+    { typed : String
+    , saved : String
+    , focused : Bool
     , transform : (String -> String)
     }
+
+
+fieldValue : String -> Model -> String
+fieldValue field model =
+    (getField field model).saved
 
 
 getField : String -> Model -> FieldModel
@@ -110,8 +117,25 @@ getField field model =
     Dict.get field model.fields |> Maybe.withDefault defaultFieldModel
 
 
-changeField : String -> Maybe String -> Model -> Model
-changeField field maybeValue model =
+typeField : String -> String -> Model -> Model
+typeField field typed model =
+    updateField field (Just typed) Nothing model
+
+
+untypeField : String -> Model -> Model
+untypeField field model =
+    model
+        |> typeField field (fieldValue field model)
+        |> focusField field False
+
+
+saveField : String -> String -> Model -> Model
+saveField field saved model =
+    updateField field Nothing (Just saved) model
+
+
+updateField : String -> Maybe String -> Maybe String -> Model -> Model
+updateField field maybeTyped maybeSaved model =
     { model | fields = model.fields |>
         Dict.update field (\maybeFieldModel ->
             case maybeFieldModel of
@@ -119,27 +143,46 @@ changeField field maybeValue model =
                     Nothing
             
                 Just fieldModel ->
-                    case maybeValue of
-                        Nothing ->
-                            Just fieldModel
-                    
-                        Just value ->
+                    case maybeSaved of
+                        Just saved ->
                             let
-                                text =
-                                    fieldModel.transform value
+                                transformed =
+                                    fieldModel.transform saved
                             in
-                            if text == fieldModel.value then
-                                Just fieldModel
-                            
-                            else
-                                Just { fieldModel | value = text }
+                            Just { fieldModel
+                            | saved = transformed
+                            , typed = transformed
+                            , focused = False
+                            }
+
+                        Nothing ->
+                            case maybeTyped of
+                                Just typed ->
+                                    Just { fieldModel | typed = typed }
+
+                                Nothing ->
+                                    Nothing
+        )
+    }
+
+
+focusField : String -> Bool -> Model -> Model
+focusField field focused model =
+    { model | fields = model.fields |>
+        Dict.update field (\maybeFieldModel ->
+            case maybeFieldModel of
+                Nothing ->
+                    Nothing
+            
+                Just fieldModel ->
+                    Just { fieldModel | focused = focused }
         )
     }
 
 
 defaultFieldModel : FieldModel
 defaultFieldModel =
-    FieldModel "" (\v -> v)
+    FieldModel "" "" False (\v -> v)
 
 
 type alias Model =
@@ -152,8 +195,8 @@ defaultModel : Model
 defaultModel =
     { mdc = Material.defaultModel
     , fields = Dict.fromList
-        [ ("lon", FieldModel "" floatFormat)
-        , ("lat", FieldModel "" floatFormat)
+        [ ("lon", FieldModel "" "" False floatFormat)
+        , ("lat", FieldModel "" "" False floatFormat)
         , ("place", defaultFieldModel)
         ]
     }
@@ -214,11 +257,6 @@ toast message model =
         ( { model | mdc = mdc }, effects )
 
 
-blur : String -> Cmd Msg
-blur id =
-    Task.attempt (\_ -> NoOp) (Dom.blur id)
-
-
 lonLatCmd : String -> String -> Cmd Msg
 lonLatCmd lon lat =
     let
@@ -234,17 +272,17 @@ lonLatCmd lon lat =
         ]
 
 
-fieldCmd : String -> String -> Model -> Cmd Msg
-fieldCmd field text model =
+fieldCmd : String -> Model -> Cmd Msg
+fieldCmd field model =
     case field of
         "lon" ->
-            lonLatCmd text (getField "lat" model).value
+            lonLatCmd (fieldValue field model) (fieldValue "lat" model)
             
         "lat" ->
-            lonLatCmd (getField "lon" model).value text
+            lonLatCmd (fieldValue "lon" model) (fieldValue field model)
             
         "place" ->
-            geocode text
+            geocode (fieldValue field model)
         
         _ ->
             Cmd.none
@@ -262,8 +300,8 @@ type Msg
     | NoOp
     | FieldFocus String
     | FieldKey String Int
-    | FieldChange String String
     | FieldInput String String
+    | FieldChange String String
     | MapCenter Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
@@ -279,28 +317,36 @@ update msg model =
             ( model, Cmd.none )
 
         FieldFocus field ->
-            ( model, selectText <| "textfield-" ++ field ++ "-native" )
+            ( model |> focusField field True, selectText <| "textfield-" ++ field ++ "-native" )
         
         FieldKey field code ->
             let
-                native =
-                    "textfield-" ++ field ++ "-native"
+                blur =
+                    Task.attempt (\_ -> NoOp) <| Dom.blur ("textfield-" ++ field ++ "-native")
             in
             case (Key.fromCode code) of
                 Key.Enter ->
-                    ( model, blur native )
+                    ( model |> focusField field False, blur )
                 
                 Key.Escape ->
-                    ( model |> changeField field Nothing, blur native )
+                    ( model |> untypeField field, blur )
                 
                 _ ->
                     ( model, Cmd.none )
 
         FieldInput field input ->
-            ( model |> changeField field (Just input), Cmd.none )
+            ( model |> typeField field input, Cmd.none )
 
         FieldChange field input ->
-            ( model, model |> fieldCmd field input )
+            if input == "" then
+                ( model |> untypeField field, Cmd.none )
+            
+            else
+                let
+                    newmodel = model
+                        |> saveField field input
+                in
+                ( newmodel, fieldCmd field newmodel )
 
         MapCenter coordinate ->
             let
@@ -310,8 +356,8 @@ update msg model =
                 lat =
                     floatFormat <| String.fromFloat coordinate.lat
             in
-            if lon == (getField "lon" model).value
-            && lat == (getField "lat" model).value then
+            if lon == fieldValue "lon" model
+            && lat == fieldValue "lat" model then
                 ( model, Cmd.none )
             
             else
@@ -324,8 +370,8 @@ update msg model =
                             mapPan (Just coordinate.lon) (Just coordinate.lat)
                 in
                 ( model
-                    |> changeField "lat" (Just lat)
-                    |> changeField "lon" (Just lon)
+                    |> saveField "lat" lat
+                    |> saveField "lon" lon
                 , Cmd.batch
                     [ pan
                     , reverseGeocode (Just coordinate.lon) (Just coordinate.lat)
@@ -347,9 +393,9 @@ update msg model =
                                     floatFormat <| String.fromFloat place.lat
                             in
                             ( model
-                                |> changeField "lat" (Just lat)
-                                |> changeField "lon" (Just lon)
-                                |> changeField "place" (Just place.displayName)
+                                |> saveField "lat" lat
+                                |> saveField "lon" lon
+                                |> saveField "place" place.displayName
                             , mapFly (Just place.lon) (Just place.lat) )
 
                 Err err ->
@@ -358,12 +404,12 @@ update msg model =
         ReverseGeocode result ->
             case result of
                 Ok place ->
-                    ( model |> changeField "place" (Just place.displayName), Cmd.none )
+                    ( model |> saveField "place" place.displayName, Cmd.none )
 
                 Err err ->
                     case err of
                         Http.BadPayload _ _ ->
-                            ( model |> changeField "place" (Just ""), Cmd.none )
+                            ( model |> saveField "place" "", Cmd.none )
                         
                         _ ->
                             model |> toast (httpErrorMessage err "omgekeerd geocoderen")
@@ -376,6 +422,18 @@ whiteTransparentBackground =
     Options.css "background-color" "rgba(255, 255, 255, 0.77)"
 
 
+textfieldValue : String -> Model -> Textfield.Property m
+textfieldValue field model =
+    let
+        fieldModel = getField field model
+
+        value_ = if fieldModel.focused
+            then fieldModel.typed
+            else fieldModel.saved
+    in
+    Textfield.value value_
+
+
 ordinateTextField : String -> String -> Model -> Html Msg
 ordinateTextField field label model =
     let
@@ -384,7 +442,7 @@ ordinateTextField field label model =
     in
     Textfield.view Mdc index model.mdc
         [ Textfield.label label
-        , Textfield.value (getField field model).value
+        , textfieldValue field model
         , Textfield.box
         , Textfield.pattern "-?\\d\\d?\\d?\\.?\\d*"
         , whiteTransparentBackground
@@ -411,7 +469,7 @@ view model =
             ]
             [ Textfield.view Mdc "textfield-place" model.mdc
                 [ Textfield.label "Plek"
-                , Textfield.value (getField "place" model).value
+                , textfieldValue "place" model
                 , Textfield.fullwidth
                 -- , Textfield.trailingIcon "cancel"
                 , whiteTransparentBackground
