@@ -1,5 +1,13 @@
 port module Main exposing (..)
 
+import Material
+import Material.Button as Button
+import Material.Options as Options
+import Material.Textfield as Textfield
+import Material.Snackbar as Snackbar
+import Material.Icon as Icon
+import Internal.Textfield.Model
+import Internal.Msg
 import Browser
 import Browser.Dom as Dom
 import Task
@@ -9,12 +17,6 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Keyboard.Key as Key
-import Material
-import Material.Button as Button
-import Material.Options as Options
-import Material.Textfield as Textfield
-import Material.Snackbar as Snackbar
-import Material.Icon as Icon
 import Json.Encode as E
 import Http
 import Json.Decode as D
@@ -100,8 +102,8 @@ httpErrorMessage err base =
 
 
 type alias FieldModel =
-    { old : String
-    , new : String
+    { value : String
+    , changed : Bool
     , transform : (String -> String)
     }
 
@@ -111,8 +113,38 @@ getField field model =
     Dict.get field model.fields |> Maybe.withDefault defaultFieldModel
 
 
-updateField : String -> Maybe String -> Maybe String -> Model -> Model
-updateField field maybeOld maybeNew model =
+changeField : String -> Maybe String -> Model -> Model
+changeField field maybeValue model =
+    { model | fields = model.fields |>
+        Dict.update field (\maybeFieldModel ->
+            case maybeFieldModel of
+                Nothing ->
+                    Nothing
+            
+                Just fieldModel ->
+                    case maybeValue of
+                        Nothing ->
+                            Just fieldModel
+                    
+                        Just value ->
+                            let
+                                text =
+                                    fieldModel.transform value
+                            in
+                            if text == "" || text == fieldModel.value then
+                                Just fieldModel
+                            
+                            else
+                                Just { fieldModel
+                                 | changed = True
+                                 , value = text
+                                }
+        )
+    }
+
+
+unchangeField : String -> Model -> Model
+unchangeField field model =
     { model | fields = model.fields |>
         Dict.update field (\maybeFieldModel ->
             case maybeFieldModel of
@@ -121,16 +153,15 @@ updateField field maybeOld maybeNew model =
             
                 Just fieldModel ->
                     Just { fieldModel
-                        | old = maybeOld |> Maybe.withDefault fieldModel.old
-                        , new = maybeNew |> Maybe.withDefault fieldModel.new
-                        }
+                        | changed = False
+                    }
         )
     }
 
 
 defaultFieldModel : FieldModel
 defaultFieldModel =
-    FieldModel "" "" (\v -> v)
+    FieldModel "" False (\v -> v)
 
 
 type alias Model =
@@ -143,8 +174,8 @@ defaultModel : Model
 defaultModel =
     { mdc = Material.defaultModel
     , fields = Dict.fromList
-        [ ("lon", FieldModel "" "" floatFormat)
-        , ("lat", FieldModel "" "" floatFormat)
+        [ ("lon", FieldModel "" False floatFormat)
+        , ("lat", FieldModel "" False floatFormat)
         , ("place", defaultFieldModel)
         ]
     }
@@ -229,16 +260,25 @@ fieldCmd : String -> String -> Model -> Cmd Msg
 fieldCmd field text model =
     case field of
         "lon" ->
-            lonLatCmd text (getField "lat" model).new
+            lonLatCmd text (getField "lat" model).value
             
         "lat" ->
-            lonLatCmd (getField "lon" model).new text
+            lonLatCmd (getField "lon" model).value text
             
         "place" ->
             geocode text
         
         _ ->
             Cmd.none
+
+
+updateTextfield : String -> String -> Model -> Model
+updateTextfield field value model =
+    let
+        (mdcmodel, _) =
+            model |> update (Mdc (Internal.Msg.TextfieldMsg ("textfield-" ++ field) (Internal.Textfield.Model.Input value)))
+    in
+    mdcmodel
 
 
 type alias Coordinate =
@@ -252,9 +292,8 @@ type Msg
     = Mdc (Material.Msg Msg)
     | NoOp
     | FieldFocus String
-    | FieldInput String String
     | FieldKey String Int
-    | FieldBlur String
+    | FieldChange String String
     | MapCenter Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
@@ -270,10 +309,7 @@ update msg model =
             ( model, Cmd.none )
 
         FieldFocus field  ->
-            ( model, selectText <| "textfield-" ++ field ++ "-native" )
-        
-        FieldInput field input ->
-            ( model |> updateField field Nothing (Just input), Cmd.none )
+            ( model |> unchangeField field, selectText <| "textfield-" ++ field ++ "-native" )
         
         FieldKey field code ->
             let
@@ -285,31 +321,25 @@ update msg model =
                     ( model, blur id )
                 
                 Key.Escape ->
-                    let
-                        old =
-                            (getField field model).old
-                    in
-                    ( model |> updateField field Nothing (Just old), blur id )
+                    ( model |> changeField field Nothing, blur id )
                 
                 _ ->
                     ( model, Cmd.none )
 
-        FieldBlur field ->
+        FieldChange field input ->
             let
+                newmodel =
+                    model |> changeField field (Just input)
+
                 fieldModel =
-                    getField field model
-
-                text =
-                    fieldModel.transform fieldModel.new
+                    newmodel |> getField field
             in
-            if text == "" then
-                ( model |> updateField field Nothing (Just fieldModel.old), Cmd.none )
-
-            else if text == fieldModel.old then
-                ( model |> updateField field Nothing (Just text), Cmd.none )
+            if  not fieldModel.changed then
+                ( newmodel, Cmd.none )
 
             else
-                ( model |> updateField field (Just text) (Just text), fieldCmd field text model )
+                ( newmodel |> updateTextfield field fieldModel.value
+                , newmodel |> fieldCmd field fieldModel.value )
 
         MapCenter coordinate ->
             let
@@ -319,8 +349,8 @@ update msg model =
                 lat =
                     floatFormat <| String.fromFloat coordinate.lat
             in
-            if lon == (getField "lon" model).new
-            && lat == (getField "lat" model).new then
+            if lon == (getField "lon" model).value
+            && lat == (getField "lat" model).value then
                 ( model, Cmd.none )
             
             else
@@ -333,8 +363,8 @@ update msg model =
                             mapPan (Just coordinate.lon) (Just coordinate.lat)
                 in
                 ( model
-                    |> updateField "lat" (Just lat) (Just lat)
-                    |> updateField "lon" (Just lon) (Just lon)
+                    |> changeField "lat" (Just lat)
+                    |> changeField "lon" (Just lon)
                 , Cmd.batch
                     [ pan
                     , reverseGeocode (Just coordinate.lon) (Just coordinate.lat)
@@ -356,28 +386,26 @@ update msg model =
                                     floatFormat <| String.fromFloat place.lat
                             in
                             ( model
-                                |> updateField "lat" (Just lat) (Just lat)
-                                |> updateField "lon" (Just lon) (Just lon)
-                                |> updateField "place" (Just place.displayName) (Just place.displayName)
+                                |> changeField "lat" (Just lat)
+                                |> changeField "lon" (Just lon)
+                                |> changeField "place" (Just place.displayName)
                             , mapFly (Just place.lon) (Just place.lat) )
 
                 Err err ->
                     model |> toast (httpErrorMessage err "geocoderen")
                     
-        
         ReverseGeocode result ->
             case result of
                 Ok place ->
-                    ( model |> updateField "place" (Just place.displayName) (Just place.displayName), Cmd.none )
+                    ( model |> changeField "place" (Just place.displayName), Cmd.none )
 
                 Err err ->
                     case err of
                         Http.BadPayload _ _ ->
-                            ( model |> updateField "place" (Just "") (Just ""), Cmd.none )
+                            ( model |> changeField "place" (Just ""), Cmd.none )
                         
                         _ ->
                             model |> toast (httpErrorMessage err "omgekeerd geocoderen")
-
 
 ---- VIEW ----
 
@@ -386,6 +414,29 @@ whiteTransparentBackground : Options.Property c m
 whiteTransparentBackground =
     Options.css "background-color" "rgba(255, 255, 255, 0.77)"
 
+textFieldValue : String -> Model -> Textfield.Property m
+textFieldValue field model =
+    let
+        fieldModel =
+            getField field model
+        
+        value_ =
+            if fieldModel.changed then
+                fieldModel.value
+            
+            else
+                let 
+                    maybeTextfield =
+                        Dict.get ("textfield-" ++ field) model.mdc.textfield
+                in
+                case maybeTextfield of
+                    Nothing ->
+                        ""
+                
+                    Just textfield ->
+                        textfield.value |> Maybe.withDefault ""
+    in
+    Textfield.value value_
 
 ordinateTextField : String -> String -> Model -> Html Msg
 ordinateTextField field label model =
@@ -395,17 +446,16 @@ ordinateTextField field label model =
     in
     Textfield.view Mdc index model.mdc
         [ Textfield.label label
-        , Textfield.value (getField field model).new
+        , textFieldValue field model
         , Textfield.box
         , Textfield.pattern "-?\\d\\d?\\d?\\.?\\d*"
         , whiteTransparentBackground
         , Options.css "margin-right" ".5em"
-        , Options.onInput (FieldInput field)
+        , Options.onChange (FieldChange field)
         , Textfield.nativeControl
             [ Options.id (index ++ "-native")
             , Options.attribute <| size 10
             , Options.onFocus (FieldFocus field)
-            , Options.onBlur (FieldBlur field)
             , Options.on "keydown" <| D.map (FieldKey field) keyCode
             ]
         ]
@@ -422,17 +472,16 @@ view model =
             ]
             [ Textfield.view Mdc "textfield-place" model.mdc
                 [ Textfield.label "Plek"
-                , Textfield.value (getField "place" model).new
+                , textFieldValue "place" model
                 , Textfield.fullwidth
                 -- , Textfield.trailingIcon "cancel"
                 , whiteTransparentBackground
                 , Options.css "padding" "0 1em"
-                , Options.onInput (FieldInput "place")
+                , Options.onChange (FieldChange "place")
                 , Textfield.nativeControl
                     [ Options.id "textfield-place-native"
                     , Options.onFocus (FieldFocus "place")
                     , Options.on "keydown" <| D.map (FieldKey "place") keyCode
-                    , Options.onBlur (FieldBlur "place")
                     ]
                 ] []
             ]
