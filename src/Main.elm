@@ -8,6 +8,8 @@ import Material.Snackbar as Snackbar
 import Material.Icon as Icon
 import Browser
 import Browser.Dom as Dom
+import Browser.Navigation as Nav
+import Url
 import Task
 import List.Extra as List
 import Dict exposing (Dict)
@@ -235,8 +237,8 @@ floatFormat input =
                 input
 
 
-init : ( Model, Cmd Msg )
-init =
+init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
+init _ url key =
     ( defaultModel, Cmd.batch
         [ Material.init Mdc
         , geocode "onze lieve vrouwetoren, amersfoort"
@@ -303,6 +305,8 @@ type Msg
     | MapCenter Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
+    | UrlChange Url.Url
+    | UrlRequest Browser.UrlRequest
     
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -405,6 +409,13 @@ update msg model =
                         
                         _ ->
                             model |> toast (httpErrorMessage err "omgekeerd geocoderen")
+        
+        UrlChange _ ->
+            ( model, Cmd.none )
+
+        UrlRequest _ ->
+            ( model, Cmd.none )
+
 
 ---- VIEW ----
 
@@ -451,54 +462,58 @@ ordinateTextField field label model =
         []
 
 
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
-    div []
-        [ div [ id "place"
-            , style "position" "absolute"
-            , style "top" ".5em", style "left" ".5em"
-            , style "width" "calc(100% - 1em)"
-            ]
-            [ Textfield.view Mdc "textfield-place" model.mdc
-                [ Textfield.label "Plek"
-                , textfieldValue "place" model
-                , Textfield.fullwidth
-                -- , Textfield.trailingIcon "cancel"
-                , whiteTransparentBackground
-                , Options.css "padding" "0 1em"
-                , Options.onInput (FieldInput "place")
-                , Options.onChange (FieldChange "place")
-                , Textfield.nativeControl
-                    [ Options.id "textfield-place-native"
-                    , Options.onFocus (FieldFocus "place")
-                    , Options.on "keydown" <| D.map (FieldKey "place") keyCode
-                    ]
+    { title = "Elm Map Demo"
+    , body =
+        [ div []
+            [ div [ id "place"
+                , style "position" "absolute"
+                , style "top" ".5em", style "left" ".5em"
+                , style "width" "calc(100% - 1em)"
+                ]
+                [ Textfield.view Mdc "textfield-place" model.mdc
+                    [ Textfield.label "Plek"
+                    , textfieldValue "place" model
+                    , Textfield.fullwidth
+                    -- , Textfield.trailingIcon "cancel"
+                    , whiteTransparentBackground
+                    , Options.css "padding" "0 1em"
+                    , Options.onInput (FieldInput "place")
+                    , Options.onChange (FieldChange "place")
+                    , Textfield.nativeControl
+                        [ Options.id "textfield-place-native"
+                        , Options.onFocus (FieldFocus "place")
+                        , Options.on "keydown" <| D.map (FieldKey "place") keyCode
+                        ]
+                    ] []
+                ]
+            , div [ id "lonlat"
+                , style "position" "absolute"
+                , style "bottom" "0", style "left" ".5em"
+                ]
+                [ ordinateTextField "lon" "Lengtegraad" model
+                , ordinateTextField "lat" "Breedtegraad" model
+                ]
+            , div [ id "map"
+                , style "position" "absolute", style "top" "0"
+                , style "width" "100%", style "height" "100%"
+                , style "z-index" "-1"
+                , style "background-image" "url('./logo.svg')"
+                , style "background-position" "center center"
+                , style "background-repeat" "no-repeat"
+                , style "background-size" "30% 30%"
                 ] []
+            , Icon.view [ Options.id "icon-visor"
+                , Options.css "position" "absolute"
+                , Options.css "top" "50%", Options.css "left" "50%"
+                , Options.css "transform" "translate(-50%, -50%)"
+                , Options.css "user-select" "none"
+                ] "gps_not_fixed"
+            , Snackbar.view Mdc "my-snackbar" model.mdc [] []
             ]
-        , div [ id "lonlat"
-            , style "position" "absolute"
-            , style "bottom" "0", style "left" ".5em"
-            ]
-            [ ordinateTextField "lon" "Lengtegraad" model
-            , ordinateTextField "lat" "Breedtegraad" model
-            ]
-        , div [ id "map"
-            , style "position" "absolute", style "top" "0"
-            , style "width" "100%", style "height" "100%"
-            , style "z-index" "-1"
-            , style "background-image" "url('./logo.svg')"
-            , style "background-position" "center center"
-            , style "background-repeat" "no-repeat"
-            , style "background-size" "30% 30%"
-            ] []
-        , Icon.view [ Options.id "icon-visor"
-            , Options.css "position" "absolute"
-            , Options.css "top" "50%", Options.css "left" "50%"
-            , Options.css "transform" "translate(-50%, -50%)"
-            , Options.css "user-select" "none"
-            ] "gps_not_fixed"
-        , Snackbar.view Mdc "my-snackbar" model.mdc [] []
         ]
+    }
 
 
 ---- SUBSCRIPTIONS ----
@@ -567,11 +582,12 @@ selectText id =
 ---- PROGRAM ----
 
 
-main : Program () Model Msg
 main =
-    Browser.element
-        { view = view
-        , init = \_ -> init
+    Browser.application
+        { init = init
+        , view = view
         , update = update
         , subscriptions = subscriptions
+        , onUrlChange = UrlChange
+        , onUrlRequest = UrlRequest
         }
