@@ -303,6 +303,7 @@ routeParser =
         , Parser.map Reverse (Parser.s "reverse" <?> queryFloat "lon" <?> queryFloat "lat")
         ]
 
+
 queryFloat : String -> Query.Parser (Maybe Float)
 queryFloat param =
     Query.custom param <| \stringList ->
@@ -312,6 +313,7 @@ queryFloat param =
 
             _ ->
                 Nothing
+
 
 ---- UPDATE ----
 
@@ -422,26 +424,17 @@ update msg model =
 
         MapCenter coordinate ->
             let
-                lon = floatFormat <| String.fromFloat coordinate.lon
-                lat = floatFormat <| String.fromFloat coordinate.lat
+                pan = if coordinate.there
+                    then Cmd.none
+                    else mapPan (Just coordinate.lon) (Just coordinate.lat)
             in
-            if lon == fieldValue "lon" model
-            && lat == fieldValue "lat" model
-                then ( model, Cmd.none )
-            
-            else
-                let
-                    pan = if coordinate.there
-                        then Cmd.none
-                        else mapPan (Just coordinate.lon) (Just coordinate.lat)
-                in
-                ( model
-                    |> saveField "lat" lat
-                    |> saveField "lon" lon
-                , Cmd.batch
-                    [ pan
-                    , reverseGeocode (Just coordinate.lon) (Just coordinate.lat)
-                    ] )
+            ( model
+                |> saveField "lat" (String.fromFloat coordinate.lon)
+                |> saveField "lon" (String.fromFloat coordinate.lat)
+            , Cmd.batch
+                [ pan
+                , reverseGeocode (Just coordinate.lon) (Just coordinate.lat)
+                ] )
                                 
         Geocode result ->
             case result of
@@ -452,8 +445,8 @@ update msg model =
                             
                         Just place ->
                             ( model
-                                |> saveField "lon" (floatFormat <| String.fromFloat place.lon)
-                                |> saveField "lat" (floatFormat <| String.fromFloat place.lat)
+                                |> saveField "lon" (String.fromFloat place.lon)
+                                |> saveField "lat" (String.fromFloat place.lat)
                                 |> saveField "place" place.displayName
                             , mapFly (Just place.lon) (Just place.lat) )
 
@@ -464,8 +457,8 @@ update msg model =
             case result of
                 Ok place ->
                     ( model
-                        |> saveField "lon" (floatFormat <| String.fromFloat place.lon)
-                        |> saveField "lat" (floatFormat <| String.fromFloat place.lat)
+                        |> saveField "lon" (String.fromFloat place.lon)
+                        |> saveField "lat" (String.fromFloat place.lat)
                         |> saveField "place" place.displayName
                     , Cmd.none )
 
