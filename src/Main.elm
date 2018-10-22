@@ -276,7 +276,14 @@ init _ url key =
                                     toast "Geen geldige breedtegraad" baseModel
                             
                                 Just lat ->
-                                    ( baseModel, lonLatCmd (String.fromFloat lon) (String.fromFloat lat) )
+                                    let
+                                        lonString = String.fromFloat lon
+                                        latString = String.fromFloat lat
+                                    in
+                                    ( baseModel
+                                        |> saveField "lon" lonString
+                                        |> saveField "lat" latString
+                                    , lonLatCmd lonString latString )
                       
     in
     ( model, Cmd.batch
@@ -343,15 +350,18 @@ lonLatCmd lon lat =
 
 fieldCmd : String -> Model -> Cmd Msg
 fieldCmd field model =
+    let
+        value_ = fieldValue field model
+    in
     case field of
         "lon" ->
-            lonLatCmd (fieldValue field model) (fieldValue "lat" model)
+            lonLatCmd value_ (fieldValue "lat" model)
             
         "lat" ->
-            lonLatCmd (fieldValue "lon" model) (fieldValue field model)
+            lonLatCmd (fieldValue "lon" model) value_
             
         "place" ->
-            geocode (fieldValue field model)
+            geocode value_
         
         _ ->
             Cmd.none
@@ -457,8 +467,6 @@ update msg model =
             case result of
                 Ok place ->
                     ( model
-                        |> saveField "lon" (String.fromFloat place.lon)
-                        |> saveField "lat" (String.fromFloat place.lat)
                         |> saveField "place" place.displayName
                     , Cmd.none )
 
