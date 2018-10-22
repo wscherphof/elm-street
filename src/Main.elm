@@ -6,8 +6,6 @@ import Material.Options as Options
 import Material.Textfield as Textfield
 import Material.Snackbar as Snackbar
 import Material.Icon as Icon
-import Internal.Textfield.Model
-import Internal.Msg
 import Browser
 import Browser.Dom as Dom
 import Task
@@ -103,7 +101,6 @@ httpErrorMessage err base =
 
 type alias FieldModel =
     { value : String
-    , changed : Bool
     , transform : (String -> String)
     }
 
@@ -131,37 +128,18 @@ changeField field maybeValue model =
                                 text =
                                     fieldModel.transform value
                             in
-                            if text == "" || text == fieldModel.value then
+                            if text == fieldModel.value then
                                 Just fieldModel
                             
                             else
-                                Just { fieldModel
-                                 | changed = True
-                                 , value = text
-                                }
-        )
-    }
-
-
-unchangeField : String -> Model -> Model
-unchangeField field model =
-    { model | fields = model.fields |>
-        Dict.update field (\maybeFieldModel ->
-            case maybeFieldModel of
-                Nothing ->
-                    Nothing
-            
-                Just fieldModel ->
-                    Just { fieldModel
-                        | changed = False
-                    }
+                                Just { fieldModel | value = text }
         )
     }
 
 
 defaultFieldModel : FieldModel
 defaultFieldModel =
-    FieldModel "" False (\v -> v)
+    FieldModel "" (\v -> v)
 
 
 type alias Model =
@@ -174,8 +152,8 @@ defaultModel : Model
 defaultModel =
     { mdc = Material.defaultModel
     , fields = Dict.fromList
-        [ ("lon", FieldModel "" False floatFormat)
-        , ("lat", FieldModel "" False floatFormat)
+        [ ("lon", FieldModel "" floatFormat)
+        , ("lat", FieldModel "" floatFormat)
         , ("place", defaultFieldModel)
         ]
     }
@@ -272,15 +250,6 @@ fieldCmd field text model =
             Cmd.none
 
 
-updateTextfield : String -> String -> Model -> Model
-updateTextfield field value model =
-    let
-        (mdcmodel, _) =
-            model |> update (Mdc (Internal.Msg.TextfieldMsg ("textfield-" ++ field) (Internal.Textfield.Model.Input value)))
-    in
-    mdcmodel
-
-
 type alias Coordinate =
     { lon : Float
     , lat : Float
@@ -294,6 +263,7 @@ type Msg
     | FieldFocus String
     | FieldKey String Int
     | FieldChange String String
+    | FieldInput String String
     | MapCenter Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
@@ -308,38 +278,29 @@ update msg model =
         NoOp ->
             ( model, Cmd.none )
 
-        FieldFocus field  ->
-            ( model |> unchangeField field, selectText <| "textfield-" ++ field ++ "-native" )
+        FieldFocus field ->
+            ( model, selectText <| "textfield-" ++ field ++ "-native" )
         
         FieldKey field code ->
             let
-                id =
+                native =
                     "textfield-" ++ field ++ "-native"
             in
             case (Key.fromCode code) of
                 Key.Enter ->
-                    ( model, blur id )
+                    ( model, blur native )
                 
                 Key.Escape ->
-                    ( model |> changeField field Nothing, blur id )
+                    ( model |> changeField field Nothing, blur native )
                 
                 _ ->
                     ( model, Cmd.none )
 
+        FieldInput field input ->
+            ( model |> changeField field (Just input), Cmd.none )
+
         FieldChange field input ->
-            let
-                newmodel =
-                    model |> changeField field (Just input)
-
-                fieldModel =
-                    newmodel |> getField field
-            in
-            if  not fieldModel.changed then
-                ( newmodel, Cmd.none )
-
-            else
-                ( newmodel |> updateTextfield field fieldModel.value
-                , newmodel |> fieldCmd field fieldModel.value )
+            ( model, model |> fieldCmd field input )
 
         MapCenter coordinate ->
             let
@@ -414,29 +375,6 @@ whiteTransparentBackground : Options.Property c m
 whiteTransparentBackground =
     Options.css "background-color" "rgba(255, 255, 255, 0.77)"
 
-textFieldValue : String -> Model -> Textfield.Property m
-textFieldValue field model =
-    let
-        fieldModel =
-            getField field model
-        
-        value_ =
-            if fieldModel.changed then
-                fieldModel.value
-            
-            else
-                let 
-                    maybeTextfield =
-                        Dict.get ("textfield-" ++ field) model.mdc.textfield
-                in
-                case maybeTextfield of
-                    Nothing ->
-                        ""
-                
-                    Just textfield ->
-                        textfield.value |> Maybe.withDefault ""
-    in
-    Textfield.value value_
 
 ordinateTextField : String -> String -> Model -> Html Msg
 ordinateTextField field label model =
@@ -446,11 +384,12 @@ ordinateTextField field label model =
     in
     Textfield.view Mdc index model.mdc
         [ Textfield.label label
-        , textFieldValue field model
+        , Textfield.value (getField field model).value
         , Textfield.box
         , Textfield.pattern "-?\\d\\d?\\d?\\.?\\d*"
         , whiteTransparentBackground
         , Options.css "margin-right" ".5em"
+        , Options.onInput (FieldInput field)
         , Options.onChange (FieldChange field)
         , Textfield.nativeControl
             [ Options.id (index ++ "-native")
@@ -472,11 +411,12 @@ view model =
             ]
             [ Textfield.view Mdc "textfield-place" model.mdc
                 [ Textfield.label "Plek"
-                , textFieldValue "place" model
+                , Textfield.value (getField "place" model).value
                 , Textfield.fullwidth
                 -- , Textfield.trailingIcon "cancel"
                 , whiteTransparentBackground
                 , Options.css "padding" "0 1em"
+                , Options.onInput (FieldInput "place")
                 , Options.onChange (FieldChange "place")
                 , Textfield.nativeControl
                     [ Options.id "textfield-place-native"
