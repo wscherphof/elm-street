@@ -386,7 +386,7 @@ update msg model =
                 Ok places ->
                     case (List.head places) of
                         Nothing ->
-                            ( model, Cmd.none )
+                            model |> toast "Niets gevonden"
                             
                         Just place ->
                             let
