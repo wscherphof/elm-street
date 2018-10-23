@@ -204,10 +204,7 @@ floatFieldModel =
                     last =
                         List.last parts |> Maybe.withDefault ""
                 in
-                if List.length parts == 2 && String.length last <= 5 then
-                    input
-                
-                else
+                if List.length parts == 2 && String.length last > 5 then
                     let
                         fraction =
                             String.toFloat ("0.1" ++ last) |> Maybe.withDefault 0
@@ -216,6 +213,9 @@ floatFieldModel =
                             String.fromInt <| round (fraction * 1000000)
                     in
                     first ++ "." ++ (String.dropLeft 1 decimals)
+
+                else
+                    input
 
 
 type Move
