@@ -107,8 +107,8 @@ type alias FieldModel =
     { typed : String
     , saved : String
     , focused : Bool
-    , transform : (String -> String)
     , select : Bool
+    , format : (String -> String)
     }
 
 
@@ -151,12 +151,12 @@ updateField field maybeTyped maybeSaved model =
                     case maybeSaved of
                         Just saved ->
                             let
-                                transformed =
-                                    fieldModel.transform saved
+                                formatted =
+                                    fieldModel.format saved
                             in
                             Just { fieldModel
-                            | saved = transformed
-                            , typed = transformed
+                            | saved = formatted
+                            , typed = formatted
                             , focused = False
                             }
 
@@ -187,39 +187,40 @@ focusField field focused model =
 
 defaultFieldModel : FieldModel
 defaultFieldModel =
-    FieldModel "" "" False (\v -> v) True
+    FieldModel "" "" False True <| \v -> v
 
 
-floatFormat : String -> String
-floatFormat input =
-    case (String.toFloat input) of
-        Nothing ->
-            ""
-            
-        Just float ->
-            let
-                parts =
-                    String.split "." input
+floatFieldModel : FieldModel
+floatFieldModel =
+    FieldModel "" "" False False <| \input ->
+        case (String.toFloat input) of
+            Nothing ->
+                ""
                 
-                first =
-                    List.head parts |> Maybe.withDefault ""
-                
-                last =
-                    List.last parts |> Maybe.withDefault ""
-            in
-            if List.length parts == 2
-            && String.length last > 5 then
+            Just float ->
                 let
-                    fraction =
-                        String.toFloat ("0." ++ last) |> Maybe.withDefault 0
-
-                    decimals =
-                        String.fromInt <| round (fraction * 100000)
+                    parts =
+                        String.split "." input
+                    
+                    first =
+                        List.head parts |> Maybe.withDefault ""
+                    
+                    last =
+                        List.last parts |> Maybe.withDefault ""
                 in
-                first ++ "." ++ decimals
-            
-            else
-                input
+                if List.length parts == 2
+                && String.length last > 5 then
+                    let
+                        fraction =
+                            String.toFloat ("0." ++ last) |> Maybe.withDefault 0
+
+                        decimals =
+                            String.fromInt <| round (fraction * 100000)
+                    in
+                    first ++ "." ++ decimals
+                
+                else
+                    input
 
 
 type alias Model =
@@ -236,8 +237,8 @@ defaultModel url key =
     , url = url
     , key = key
     , fields = Dict.fromList
-        [ ("lon", FieldModel "" "" False floatFormat False)
-        , ("lat", FieldModel "" "" False floatFormat False)
+        [ ("lon", floatFieldModel)
+        , ("lat", floatFieldModel)
         , ("place", defaultFieldModel)
         ]
     }
@@ -246,45 +247,8 @@ defaultModel url key =
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
     let
-        baseModel =
-            defaultModel url key
-
-        route =
-            Parser.parse routeParser url |> Maybe.withDefault Home
-
-        ( model, cmd ) =
-            case route of
-                Home ->
-                    ( baseModel, geocode "onze lieve vrouwetoren, amersfoort" )
-            
-                Search maybeQ ->
-                    case maybeQ of
-                        Nothing ->
-                            toast "Geen zoekopdracht gevonden" baseModel
-                    
-                        Just q ->
-                            ( baseModel, geocode q )
-            
-                Reverse maybeLon maybeLat ->
-                    case maybeLon of
-                        Nothing ->
-                            toast "Geen geldige lengtegraad" baseModel
-                    
-                        Just lon ->
-                            case maybeLat of
-                                Nothing ->
-                                    toast "Geen geldige breedtegraad" baseModel
-                            
-                                Just lat ->
-                                    let
-                                        lonString = String.fromFloat lon
-                                        latString = String.fromFloat lat
-                                    in
-                                    ( baseModel
-                                        |> saveField "lon" lonString
-                                        |> saveField "lat" latString
-                                    , lonLatCmd lonString latString )
-                      
+        ( model, cmd) =
+            route <| defaultModel url key
     in
     ( model, Cmd.batch
         [ Material.init Mdc
@@ -296,10 +260,15 @@ init _ url key =
 ---- ROUTES ----
 
 
-type Route
-    = Home
-    | Search (Maybe String)
-    | Reverse (Maybe Float) (Maybe Float)
+queryFloat : String -> Query.Parser (Maybe Float)
+queryFloat param =
+    Query.custom param <| \stringList ->
+        case stringList of
+            [str] ->
+                String.toFloat str
+
+            _ ->
+                Nothing
 
 
 routeParser : Parser (Route -> a) a
@@ -311,15 +280,50 @@ routeParser =
         ]
 
 
-queryFloat : String -> Query.Parser (Maybe Float)
-queryFloat param =
-    Query.custom param <| \stringList ->
-        case stringList of
-            [str] ->
-                String.toFloat str
+type Route
+    = Home
+    | Search (Maybe String)
+    | Reverse (Maybe Float) (Maybe Float)
 
-            _ ->
-                Nothing
+
+route : Model -> ( Model, Cmd Msg )
+route model =
+    case Parser.parse routeParser model.url of
+        Nothing ->
+            ( model, Nav.pushUrl model.key "/" )
+
+        Just route_ ->
+            case route_ of
+                Home ->
+                    ( model, geocode "onze lieve vrouwetoren, amersfoort" )
+            
+                Search maybeQ ->
+                    case maybeQ of
+                        Nothing ->
+                            toast "Geen zoekopdracht gevonden" model
+                    
+                        Just q ->
+                            ( model, geocode q )
+            
+                Reverse maybeLon maybeLat ->
+                    case maybeLon of
+                        Nothing ->
+                            toast "Geen geldige lengtegraad" model
+                    
+                        Just lon ->
+                            case maybeLat of
+                                Nothing ->
+                                    toast "Geen geldige breedtegraad" model
+                            
+                                Just lat ->
+                                    let
+                                        lonString = String.fromFloat lon
+                                        latString = String.fromFloat lat
+                                    in
+                                    ( model
+                                        |> saveField "lon" lonString
+                                        |> saveField "lat" latString
+                                    , lonLatCmd lonString latString )
 
 
 ---- UPDATE ----
@@ -487,9 +491,7 @@ update msg model =
                     ( model, Nav.load href )
 
         UrlChange url ->
-            ( { model | url = url }
-            , Cmd.none
-            )
+            route { model | url = url }
 
 
 ---- VIEW ----
