@@ -208,8 +208,10 @@ floatFieldModel =
                     last =
                         List.last parts |> Maybe.withDefault ""
                 in
-                if List.length parts == 2
-                && String.length last > 5 then
+                if List.length parts == 2 && String.length last <= 5 then
+                    input
+                
+                else
                     let
                         fraction =
                             String.toFloat ("0." ++ last) |> Maybe.withDefault 0
@@ -218,9 +220,6 @@ floatFieldModel =
                             String.fromInt <| round (fraction * 100000)
                     in
                     first ++ "." ++ decimals
-                
-                else
-                    input
 
 
 type alias Model =
@@ -388,8 +387,8 @@ type Msg
     | MapCenter Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
-    | UrlChange Url.Url
     | UrlRequest Browser.UrlRequest
+    | UrlChange Url.Url
     
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -438,16 +437,19 @@ update msg model =
 
         MapCenter coordinate ->
             let
-                pan = if coordinate.there
-                    then Cmd.none
-                    else mapPan (Just coordinate.lon) (Just coordinate.lat)
+                pan =
+                    if coordinate.there then
+                        Cmd.none
+
+                    else
+                        mapPan (Just coordinate.lon) (Just coordinate.lat)
             in
-            ( model
-                |> saveField "lat" (String.fromFloat coordinate.lon)
-                |> saveField "lon" (String.fromFloat coordinate.lat)
-            , Cmd.batch
+            ( model , Cmd.batch
                 [ pan
-                , reverseGeocode (Just coordinate.lon) (Just coordinate.lat)
+                , Nav.pushUrl model.key <| Url.relative [ "reverse" ]
+                    [ Url.string "lon" (String.fromFloat coordinate.lon)
+                    , Url.string "lat" (String.fromFloat coordinate.lat)
+                    ]
                 ] )
                                 
         Geocode result ->
