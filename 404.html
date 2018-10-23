@@ -28,7 +28,7 @@
       var l = window.location;
       console.log(l.pathname);
       l.replace(
-        'https://wscherphof.github.io/elm-app-demo/?p=/' +
+        '/elm-app-demo/?p=/' +
         l.pathname.slice(1).split('/').slice(segmentCount).join('/').replace(/&/g, '~and~') +
         (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
         l.hash
