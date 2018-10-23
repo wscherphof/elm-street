@@ -210,12 +210,12 @@ floatFieldModel =
                 else
                     let
                         fraction =
-                            String.toFloat ("0." ++ last) |> Maybe.withDefault 0
+                            String.toFloat ("0.1" ++ last) |> Maybe.withDefault 0
 
                         decimals =
-                            String.fromInt <| round (fraction * 100000)
+                            String.fromInt <| round (fraction * 1000000)
                     in
-                    first ++ "." ++ decimals
+                    first ++ "." ++ (String.dropLeft 1 decimals)
 
 
 type Move
