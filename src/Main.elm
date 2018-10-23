@@ -29,6 +29,25 @@ import Url.Builder as Url
 ---- HTTP ----
 
 
+httpErrorMessage : Http.Error -> String -> String
+httpErrorMessage err base =
+    case err of
+        Http.BadUrl url ->
+            "Ongeldige url bij " ++ base ++ " " ++ url
+
+        Http.Timeout ->
+            "Timeout bij " ++ base
+
+        Http.NetworkError ->
+            "Netwerkfout bij " ++ base
+
+        Http.BadStatus response ->
+            "Foutcode " ++ (String.fromInt response.status.code) ++ " bij " ++ base ++ ": " ++ response.status.message
+
+        Http.BadPayload message _ ->
+            "Datafout bij " ++ base ++ ": " ++ message
+
+
 type alias PlaceModel =
     { lon : Float
     , lat : Float
@@ -52,52 +71,29 @@ geocodeUrl q =
         ]
 
 
+reverseUrl : String -> String -> String
+reverseUrl lon lat = 
+    Url.crossOrigin "https://nominatim.openstreetmap.org" ["reverse"]
+        [ Url.string "lon" lon
+        , Url.string "lat" lat
+        , Url.string "format" "json"
+        ]
+
+
 geocode : String -> Cmd Msg
 geocode q =
     Http.send Geocode <| Http.get (geocodeUrl q) (D.list placeDecoder)
 
 
-reverseUrl : Float -> Float -> String
-reverseUrl lon lat = 
-    Url.crossOrigin "https://nominatim.openstreetmap.org" ["reverse"]
-        [ Url.string "lon" <| String.fromFloat lon
-        , Url.string "lat" <| String.fromFloat lat
-        , Url.string "format" "json"
-        ]
-
-
-reverseGeocode : Maybe Float -> Maybe Float -> Cmd Msg
-reverseGeocode maybeLon maybeLat =
-    case maybeLon of
-        Nothing ->
-            Cmd.none
-    
-        Just lon ->
-            case maybeLat of
-                Nothing ->
-                    Cmd.none
-            
-                Just lat ->
-                    Http.send ReverseGeocode <| Http.get (reverseUrl lon lat) placeDecoder
-
-
-httpErrorMessage : Http.Error -> String -> String
-httpErrorMessage err base =
-    case err of
-        Http.BadUrl url ->
-            "Ongeldige url bij " ++ base ++ " " ++ url
-
-        Http.Timeout ->
-            "Timeout bij " ++ base
-
-        Http.NetworkError ->
-            "Netwerkfout bij " ++ base
-
-        Http.BadStatus response ->
-            "Foutcode " ++ (String.fromInt response.status.code) ++ " bij " ++ base ++ ": " ++ response.status.message
-
-        Http.BadPayload message _ ->
-            "Datafout bij " ++ base ++ ": " ++ message
+reverseGeocode : Model -> Cmd Msg
+reverseGeocode model =
+    let
+        url =
+            reverseUrl
+                (fieldValue "lon" model)
+                (fieldValue "lat" model)
+    in
+    Http.send ReverseGeocode <| Http.get url placeDecoder
 
 
 ---- MODEL ----
@@ -222,11 +218,18 @@ floatFieldModel =
                     first ++ "." ++ decimals
 
 
+type Move
+    = NoMove
+    | Fly
+    | Pan
+
+
 type alias Model =
     { mdc : Material.Model Msg
     , url : Url.Url
     , key : Nav.Key
     , fields : Dict String FieldModel
+    , move : Move
     }
 
 
@@ -240,6 +243,7 @@ defaultModel url key =
         , ("lat", floatFieldModel)
         , ("place", defaultFieldModel)
         ]
+    , move = Pan
     }
 
 
@@ -316,39 +320,32 @@ route model =
                             
                                 Just lat ->
                                     let
-                                        lonString = String.fromFloat lon
-                                        latString = String.fromFloat lat
+                                        newmodel = model
+                                            |> saveField "lon" (String.fromFloat lon)
+                                            |> saveField "lat" (String.fromFloat lat)
                                     in
-                                    ( model
-                                        |> saveField "lon" lonString
-                                        |> saveField "lat" latString
-                                    , lonLatCmd lonString latString )
+                                    ( { newmodel | move = Pan }, Cmd.batch
+                                        [ mapMove newmodel
+                                        , reverseGeocode newmodel
+                                        ] )
+
+
+navSearch : Nav.Key -> String -> Cmd Msg
+navSearch key q =
+    Nav.pushUrl key <| Url.relative [ "search" ]
+        [ Url.string "q" q
+        ]
+
+
+navReverse : Nav.Key -> String -> String -> Cmd Msg
+navReverse key lon lat =
+    Nav.pushUrl key <| Url.relative [ "reverse" ]
+        [ Url.string "lon" lon
+        , Url.string "lat" lat
+        ]
 
 
 ---- UPDATE ----
-
-
-toast : String -> Model -> ( Model, Cmd Msg )
-toast message model =
-    let
-        contents =
-            Snackbar.toast Nothing message
-        ( mdc, effects ) =
-            Snackbar.add Mdc "my-snackbar" contents model.mdc
-    in
-    ( { model | mdc = mdc }, effects )
-
-
-lonLatCmd : String -> String -> Cmd Msg
-lonLatCmd lon lat =
-    let
-        maybeLon = String.toFloat lon
-        maybeLat = String.toFloat lat
-    in
-    Cmd.batch
-        [ mapFly maybeLon maybeLat
-        , reverseGeocode maybeLon maybeLat
-        ]
 
 
 fieldCmd : String -> Model -> Cmd Msg
@@ -358,13 +355,13 @@ fieldCmd field model =
     in
     case field of
         "lon" ->
-            lonLatCmd value_ (fieldValue "lat" model)
+            navReverse model.key value_ (fieldValue "lat" model)
             
         "lat" ->
-            lonLatCmd (fieldValue "lon" model) value_
+            navReverse model.key (fieldValue "lon" model) value_
             
         "place" ->
-            geocode value_
+            navSearch model.key value_
         
         _ ->
             Cmd.none
@@ -380,6 +377,8 @@ type alias Coordinate =
 type Msg
     = Mdc (Material.Msg Msg)
     | NoOp
+    | UrlRequest Browser.UrlRequest
+    | UrlChange Url.Url
     | FieldFocus String
     | FieldKey String Int
     | FieldInput String String
@@ -387,8 +386,6 @@ type Msg
     | MapCenter Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
-    | UrlRequest Browser.UrlRequest
-    | UrlChange Url.Url
     
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -399,6 +396,17 @@ update msg model =
         
         NoOp ->
             ( model, Cmd.none )
+        
+        UrlRequest urlRequest ->
+            case urlRequest of
+                Browser.Internal url ->
+                    ( model, Nav.pushUrl model.key (Url.toString url) )
+
+                Browser.External href ->
+                    ( model, Nav.load href )
+
+        UrlChange url ->
+            route { model | url = url }
 
         FieldFocus field ->
             ( model |> focusField field True
@@ -430,27 +438,21 @@ update msg model =
             
             else
                 let
-                    newmodel = model
+                    newmodel = { model | move = Fly }
                         |> saveField field input
                 in
                 ( newmodel, fieldCmd field newmodel )
 
         MapCenter coordinate ->
-            let
-                pan =
-                    if coordinate.there then
-                        Cmd.none
-
-                    else
-                        mapPan (Just coordinate.lon) (Just coordinate.lat)
-            in
-            ( model , Cmd.batch
-                [ pan
-                , Nav.pushUrl model.key <| Url.relative [ "reverse" ]
-                    [ Url.string "lon" (String.fromFloat coordinate.lon)
-                    , Url.string "lat" (String.fromFloat coordinate.lat)
-                    ]
-                ] )
+            ( { model | move = 
+                if coordinate.there then
+                    NoMove
+                
+                else
+                    Pan }
+            , navReverse model.key
+                (String.fromFloat coordinate.lon)
+                (String.fromFloat coordinate.lat) )
                                 
         Geocode result ->
             case result of
@@ -460,11 +462,13 @@ update msg model =
                             model |> toast "Niets gevonden"
                             
                         Just place ->
-                            ( model
-                                |> saveField "lon" (String.fromFloat place.lon)
-                                |> saveField "lat" (String.fromFloat place.lat)
-                                |> saveField "place" place.displayName
-                            , mapFly (Just place.lon) (Just place.lat) )
+                            let
+                                newmodel = { model | move = Fly }
+                                    |> saveField "lon" (String.fromFloat place.lon)
+                                    |> saveField "lat" (String.fromFloat place.lat)
+                                    |> saveField "place" place.displayName
+                            in
+                            ( { newmodel | move = Pan }, mapMove newmodel )
 
                 Err err ->
                     model |> toast (httpErrorMessage err "geocoderen")
@@ -483,17 +487,17 @@ update msg model =
                         
                         _ ->
                             model |> toast (httpErrorMessage err "omgekeerd geocoderen")
-        
-        UrlRequest urlRequest ->
-            case urlRequest of
-                Browser.Internal url ->
-                    ( model, Nav.pushUrl model.key (Url.toString url) )
 
-                Browser.External href ->
-                    ( model, Nav.load href )
 
-        UrlChange url ->
-            route { model | url = url }
+toast : String -> Model -> ( Model, Cmd Msg )
+toast message model =
+    let
+        contents =
+            Snackbar.toast Nothing message
+        ( mdc, effects ) =
+            Snackbar.add Mdc "my-snackbar" contents model.mdc
+    in
+    ( { model | mdc = mdc }, effects )
 
 
 ---- VIEW ----
@@ -615,35 +619,35 @@ port mapCenter : (Coordinate -> msg) -> Sub msg
 port map : E.Value -> Cmd msg
 
 
-mapPan : (Maybe Float) -> (Maybe Float) -> Cmd msg
-mapPan maybeLon maybeLat =
-    "Pan" |> mapMove 300 maybeLon maybeLat
-
-
-mapFly : (Maybe Float) -> (Maybe Float) -> Cmd msg
-mapFly maybeLon maybeLat =
-    "Fly" |> mapMove 2000 maybeLon maybeLat
-
-
-mapMove : Int -> (Maybe Float) -> (Maybe Float) -> String -> Cmd msg
-mapMove duration maybeLon maybeLat cmd =
-    case maybeLon of
-        Nothing ->
+mapMove : Model -> Cmd msg
+mapMove model =
+    case model.move of
+        NoMove ->
             Cmd.none
         
-        Just lon ->
-            case maybeLat of
-                Nothing ->
-                    Cmd.none
-                
-                Just lat ->
-                    map (E.object
-                        [ ("Cmd", E.string cmd)
-                        , ("lon", E.float lon)
-                        , ("lat", E.float lat)
-                        , ("duration", E.int duration)
-                        ]
-                    )
+        Fly ->
+            dispatchMapMove "Fly" 2000 model
+        
+        Pan ->
+            dispatchMapMove "Pan" 300 model
+
+
+dispatchMapMove : String -> Int -> Model -> Cmd msg
+dispatchMapMove cmd duration model =
+    let
+        lon =
+           String.toFloat (fieldValue "lon" model) |> Maybe.withDefault 0 
+
+        lat =
+           String.toFloat (fieldValue "lat" model) |> Maybe.withDefault 0 
+    in
+    map (E.object
+        [ ("Cmd", E.string cmd)
+        , ("lon", E.float lon)
+        , ("lat", E.float lat)
+        , ("duration", E.int duration)
+        ]
+    )
 
 
 port dom : E.Value -> Cmd msg
