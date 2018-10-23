@@ -278,7 +278,7 @@ routeParser : Parser (Route -> a) a
 routeParser =
     Parser.oneOf
         [ Parser.map Home    (Parser.top)
-        , Parser.map Search  (Parser.s "search" <?> Query.string "q")
+        , Parser.map Search  (Parser.s "search" <?> Query.string "query")
         , Parser.map Reverse (Parser.s "reverse" <?> queryFloat "lon" <?> queryFloat "lat")
         ]
 
@@ -305,8 +305,8 @@ route model =
                         Nothing ->
                             toast "Geen zoekopdracht gevonden" model
                     
-                        Just q ->
-                            ( model, geocode q )
+                        Just query ->
+                            ( model, geocode query )
             
                 Reverse maybeLon maybeLat ->
                     case maybeLon of
@@ -331,9 +331,9 @@ route model =
 
 
 navSearch : Nav.Key -> String -> Cmd Msg
-navSearch key q =
+navSearch key query =
     Nav.pushUrl key <| Url.relative [ "search" ]
-        [ Url.string "q" q
+        [ Url.string "query" query
         ]
 
 
