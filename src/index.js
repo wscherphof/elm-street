@@ -29,29 +29,52 @@ registerServiceWorker();
   app.ports.map.subscribe(function(msg) {
     switch (msg.Cmd) {
       case 'Fly':
-        fly(msg.lon, msg.lat, msg.duration);
+        elmMove = true;
+        fly(msg.lon, msg.lat);
         break;
 
       case 'Pan':
-        fly(msg.lon, msg.lat, msg.duration, true);
+        elmMove = true;
+        pan(msg.lon, msg.lat);
         break;
     }
   });
 
-  function mapCenter(coordinate, there) {
-    app.ports.mapCenter.send({
+  function mapMoved(coordinate) {
+    app.ports.mapMoved.send({
       lon: coordinate[0],
-      lat: coordinate[1],
-      there: there
+      lat: coordinate[1]
     });
   }
   
-  function fly(lon, lat, duration, skipZoom) {
+  var elmMove = false;
+  function moveend() {
+    if (elmMove) {
+      elmMove = false;
+    } else {
+      var coordinate = ol.proj.toLonLat(getMap().getView().getCenter());
+      mapMoved(coordinate);
+    }
+  }
+  
+  function singleclick(event) {
+    var coordinate = ol.proj.toLonLat(event.coordinate);
+    pan(coordinate[0], coordinate[1]);
+  }
+  
+  function fly(lon, lat) {
+    move(lon, lat, 2000)
+  }
+  
+  function pan(lon, lat) {
+    move(lon, lat, 300, true)
+  }
+  
+  function move(lon, lat, duration, skipZoom) {
     var coordinate = ol.proj.fromLonLat([lon, lat]);
     var view = getMap().getView();
     var width = getMap().getSize()[0];
     if (ol.sphere.getDistance(coordinate, view.getCenter()) > width / 100) {
-      elmMove = true;
       view.animate({
         center: coordinate,
         duration: duration
@@ -66,21 +89,6 @@ registerServiceWorker();
           duration: duration / 2
         });
         }
-    }
-  }
-  
-  function singleclick(event) {
-    var coordinate = ol.proj.toLonLat(event.coordinate);
-    mapCenter(coordinate, false);
-  }
-  
-  var elmMove = false;
-  function moveend() {
-    if (elmMove) {
-      elmMove = false;
-    } else {
-      var coordinate = ol.proj.toLonLat(getMap().getView().getCenter());
-      mapCenter(coordinate, true);
     }
   }
 

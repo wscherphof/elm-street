@@ -370,7 +370,6 @@ fieldCmd field model =
 type alias Coordinate =
     { lon : Float
     , lat : Float
-    , there : Bool
     }
 
 
@@ -383,7 +382,7 @@ type Msg
     | FieldKey String Int
     | FieldInput String String
     | FieldChange String String
-    | MapCenter Coordinate
+    | MapMoved Coordinate
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
     
@@ -443,13 +442,8 @@ update msg model =
                 in
                 ( newmodel, fieldCmd field newmodel )
 
-        MapCenter coordinate ->
-            ( { model | move = 
-                if coordinate.there then
-                    NoMove
-                
-                else
-                    Pan }
+        MapMoved coordinate ->
+            ( { model | move = NoMove }
             , navReverse model.key
                 (String.fromFloat coordinate.lon)
                 (String.fromFloat coordinate.lat) )
@@ -606,14 +600,14 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Material.subscriptions Mdc model
-        , mapCenter MapCenter
+        , mapMoved MapMoved
         ]
 
 
 ---- PORTS ----
 
 
-port mapCenter : (Coordinate -> msg) -> Sub msg
+port mapMoved : (Coordinate -> msg) -> Sub msg
 
 
 port map : E.Value -> Cmd msg
@@ -626,14 +620,14 @@ mapMove model =
             Cmd.none
         
         Fly ->
-            dispatchMapMove "Fly" 2000 model
+            dispatchMapMove "Fly" model
         
         Pan ->
-            dispatchMapMove "Pan" 300 model
+            dispatchMapMove "Pan" model
 
 
-dispatchMapMove : String -> Int -> Model -> Cmd msg
-dispatchMapMove cmd duration model =
+dispatchMapMove : String -> Model -> Cmd msg
+dispatchMapMove cmd model =
     let
         lon =
            String.toFloat (fieldValue "lon" model) |> Maybe.withDefault 0 
@@ -645,7 +639,6 @@ dispatchMapMove cmd duration model =
         [ ("Cmd", E.string cmd)
         , ("lon", E.float lon)
         , ("lat", E.float lat)
-        , ("duration", E.int duration)
         ]
     )
 
