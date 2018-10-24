@@ -85,15 +85,18 @@ geocode q =
     Http.send Geocode <| Http.get (geocodeUrl q) (D.list placeDecoder)
 
 
-reverseGeocode : Model -> Cmd Msg
-reverseGeocode model =
+reverseGeocode : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+reverseGeocode ( model, cmd ) =
     let
         url =
             reverseUrl
                 (fieldValue "lon" model)
                 (fieldValue "lat" model)
     in
-    Http.send ReverseGeocode <| Http.get url placeDecoder
+    ( model, Cmd.batch
+        [ cmd
+        , Http.send ReverseGeocode <| Http.get url placeDecoder
+        ] )
 
 
 ---- MODEL ----
@@ -218,18 +221,11 @@ floatFieldModel =
                     input
 
 
-type Move
-    = NoMove
-    | Fly
-    | Pan
-
-
 type alias Model =
     { mdc : Material.Model Msg
     , url : Url.Url
     , key : Nav.Key
     , fields : Dict String FieldModel
-    , move : Move
     }
 
 
@@ -243,7 +239,6 @@ defaultModel url key =
         , ("lat", floatFieldModel)
         , ("place", defaultFieldModel)
         ]
-    , move = Pan
     }
 
 
@@ -319,52 +314,46 @@ route model =
                                     toast "Geen geldige breedtegraad" model
                             
                                 Just lat ->
-                                    let
-                                        newmodel = model
-                                            |> saveField "lon" (String.fromFloat lon)
-                                            |> saveField "lat" (String.fromFloat lat)
-                                    in
-                                    ( { newmodel | move = Pan }, Cmd.batch
-                                        [ mapMove newmodel
-                                        , reverseGeocode newmodel
-                                        ] )
+                                    ( model
+                                        |> saveField "lon" (String.fromFloat lon)
+                                        |> saveField "lat" (String.fromFloat lat)
+                                    , Cmd.none )
+                                        |> mapMove
+                                        |> reverseGeocode
 
 
-navSearch : Nav.Key -> String -> Cmd Msg
-navSearch key query =
-    Nav.pushUrl key <| Url.relative [ "search" ]
-        [ Url.string "query" query
-        ]
+navSearch : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+navSearch ( model, cmd ) =
+    ( model, Cmd.batch
+        [ cmd
+        , Nav.pushUrl model.key <| Url.relative [ "search" ]
+            [ Url.string "query" <| fieldValue "place" model
+            ]
+        ] )
 
+navReverse : String -> String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+navReverse lon lat ( model, cmd ) =
+    let
+        lonValue =
+            (getField "lon" model).format lon
 
-navReverse : Nav.Key -> String -> String -> Cmd Msg
-navReverse key lon lat =
-    Nav.pushUrl key <| Url.relative [ "reverse" ]
-        [ Url.string "lon" lon
-        , Url.string "lat" lat
-        ]
+        latValue =
+            (getField "lat" model).format lat
+    in
+    if lonValue == fieldValue "lon" model
+    && latValue == fieldValue "lat" model then
+        ( model, cmd )
 
+    else
+        ( model, Cmd.batch
+            [ cmd
+            , Nav.pushUrl model.key <| Url.relative [ "reverse" ]
+                [ Url.string "lon" lonValue
+                , Url.string "lat" latValue
+                ]
+            ] )
 
 ---- UPDATE ----
-
-
-fieldCmd : String -> Model -> Cmd Msg
-fieldCmd field model =
-    let
-        value_ = fieldValue field model
-    in
-    case field of
-        "lon" ->
-            navReverse model.key value_ (fieldValue "lat" model)
-            
-        "lat" ->
-            navReverse model.key (fieldValue "lon" model) value_
-            
-        "place" ->
-            navSearch model.key value_
-        
-        _ ->
-            Cmd.none
 
 
 type alias Coordinate =
@@ -436,17 +425,31 @@ update msg model =
                 ( model |> untypeField field, Cmd.none )
             
             else
-                let
-                    newmodel = { model | move = Fly }
-                        |> saveField field input
-                in
-                ( newmodel, fieldCmd field newmodel )
+                case field of
+                    "lon" ->
+                        ( model, Cmd.none )
+                            |> navReverse
+                                input
+                                (fieldValue "lat" model)
+                        
+                    "lat" ->
+                        ( model, Cmd.none )
+                            |> navReverse
+                                (fieldValue "lon" model)
+                                input
+                        
+                    "place" ->
+                        ( model |> saveField field input, Cmd.none )
+                            |> navSearch
+                    
+                    _ ->
+                        ( model, Cmd.none )
 
         MapMoved coordinate ->
-            ( { model | move = NoMove }
-            , navReverse model.key
-                (String.fromFloat coordinate.lon)
-                (String.fromFloat coordinate.lat) )
+            ( model, Cmd.none )
+                |> navReverse
+                    (String.fromFloat coordinate.lon)
+                    (String.fromFloat coordinate.lat)
                                 
         Geocode result ->
             case result of
@@ -456,13 +459,11 @@ update msg model =
                             model |> toast "Niets gevonden"
                             
                         Just place ->
-                            let
-                                newmodel = { model | move = Fly }
-                                    |> saveField "lon" (String.fromFloat place.lon)
-                                    |> saveField "lat" (String.fromFloat place.lat)
-                                    |> saveField "place" place.displayName
-                            in
-                            ( { newmodel | move = Pan }, mapMove newmodel )
+                            mapMove ( model
+                                |> saveField "lon" (String.fromFloat place.lon)
+                                |> saveField "lat" (String.fromFloat place.lat)
+                                |> saveField "place" place.displayName
+                            , Cmd.none )
 
                 Err err ->
                     model |> toast (httpErrorMessage err "geocoderen")
@@ -613,21 +614,8 @@ port mapMoved : (Coordinate -> msg) -> Sub msg
 port map : E.Value -> Cmd msg
 
 
-mapMove : Model -> Cmd msg
-mapMove model =
-    case model.move of
-        NoMove ->
-            Cmd.none
-        
-        Fly ->
-            dispatchMapMove "Fly" model
-        
-        Pan ->
-            dispatchMapMove "Pan" model
-
-
-dispatchMapMove : String -> Model -> Cmd msg
-dispatchMapMove cmd model =
+mapMove : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+mapMove ( model, cmd ) =
     let
         lon =
            String.toFloat (fieldValue "lon" model) |> Maybe.withDefault 0 
@@ -635,12 +623,14 @@ dispatchMapMove cmd model =
         lat =
            String.toFloat (fieldValue "lat" model) |> Maybe.withDefault 0 
     in
-    map (E.object
-        [ ("Cmd", E.string cmd)
-        , ("lon", E.float lon)
-        , ("lat", E.float lat)
-        ]
-    )
+    ( model, Cmd.batch
+        [ cmd
+        , map <| E.object
+            [ ("Cmd", E.string "Fly")
+            , ("lon", E.float lon)
+            , ("lat", E.float lat)
+            ]
+        ] )
 
 
 port dom : E.Value -> Cmd msg
