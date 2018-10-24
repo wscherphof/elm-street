@@ -569,6 +569,7 @@ view model =
             , div [ id "lonlat"
                 , style "position" "absolute"
                 , style "bottom" "0", style "left" ".5em"
+                , style "max-width" "calc(100% - 1em - .5em - 1.375em - 6px)"
                 ]
                 [ ordinateTextField "lon" "Lengtegraad" model
                 , ordinateTextField "lat" "Breedtegraad" model
