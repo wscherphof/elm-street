@@ -5658,7 +5658,7 @@ a.mdc-list-item {
     right: initial;
     position: absolute;
     bottom: 20px;
-    width: calc(100% - 48px);
+    /* width: calc(100% - 48px); */
     text-overflow: ellipsis;
     white-space: nowrap;
     pointer-events: none;
