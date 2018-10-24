@@ -1,0 +1,26 @@
+{
+  "name": "elm-map-demo",
+  "version": "1.0.0",
+  "description": "Demo running an [OpenLayers](https://openlayers.org/) map in an [Elm 0.19](https://elm-lang.org/) app",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "elm-app build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wscherphof/elm-map-demo.git"
+  },
+  "author": "Wouter Scherphof",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/wscherphof/elm-map-demo/issues"
+  },
+  "homepage": "https://github.com/wscherphof/elm-map-demo#readme",
+  "devDependencies": {
+    "create-elm-app": "^2.2.0"
+  }
+}
