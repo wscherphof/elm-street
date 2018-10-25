@@ -1,5 +1,4 @@
 {
-    "homepage": "https://wscherphof.github.io/elm-map-demo",
     "type": "application",
     "source-directories": [
         "src",
