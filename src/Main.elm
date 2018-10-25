@@ -213,9 +213,30 @@ floatFieldModel =
                             String.toFloat ("0.1" ++ last) |> Maybe.withDefault 0
 
                         decimals =
-                            String.fromInt <| round (fraction * 1000000)
+                            round (fraction * 1000000)
+                        
+                        front =
+                            if decimals == 200000 then
+                                let
+                                    num =
+                                        String.toInt first |> Maybe.withDefault 0
+                                    
+                                    next =
+                                        String.fromInt <| abs num + 1
+                                    
+                                    sign =
+                                        if num < 0 then
+                                            "-"
+                                        
+                                        else
+                                            ""
+                                in
+                                sign ++ next
+                            
+                            else
+                                first
                     in
-                    first ++ "." ++ (String.dropLeft 1 decimals)
+                    front ++ "." ++ (String.dropLeft 1 <| String.fromInt decimals)
 
                 else
                     input
@@ -298,7 +319,7 @@ route model =
                 Search maybeQ ->
                     case maybeQ of
                         Nothing ->
-                            toast "Geen zoekopdracht gevonden" model
+                            model |> toast "Geen zoekopdracht gevonden"
                     
                         Just query ->
                             ( model, geocode query )
@@ -306,20 +327,27 @@ route model =
                 Reverse maybeLon maybeLat ->
                     case maybeLon of
                         Nothing ->
-                            toast "Geen geldige lengtegraad" model
+                            model |> toast "Geen geldige lengtegraad"
                     
                         Just lon ->
                             case maybeLat of
                                 Nothing ->
-                                    toast "Geen geldige breedtegraad" model
+                                    model |> toast "Geen geldige breedtegraad"
                             
                                 Just lat ->
-                                    ( model
-                                        |> saveField "lon" (String.fromFloat lon)
-                                        |> saveField "lat" (String.fromFloat lat)
-                                    , Cmd.none )
-                                        |> mapMove
-                                        |> reverseGeocode
+                                    if lon > 180 || lon < -180 then
+                                        model |> toast "Geen geldige lengtegraad"
+
+                                    else if lat > 90 || lat < -90 then
+                                        model |> toast "Geen geldige breedtegraad"
+                                    
+                                    else
+                                        ( model
+                                            |> saveField "lon" (String.fromFloat lon)
+                                            |> saveField "lat" (String.fromFloat lat)
+                                        , Cmd.none )
+                                            |> mapMove
+                                            |> reverseGeocode
 
 
 navSearch : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
