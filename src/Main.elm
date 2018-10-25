@@ -222,16 +222,16 @@ floatFieldModel =
                                         String.toInt first |> Maybe.withDefault 0
                                     
                                     next =
-                                        String.fromInt <| abs num + 1
+                                        abs num + 1
                                     
-                                    sign =
+                                    val =
                                         if num < 0 then
-                                            "-"
+                                            0 - next
                                         
                                         else
-                                            ""
+                                            next
                                 in
-                                sign ++ next
+                                String.fromInt val
                             
                             else
                                 first
