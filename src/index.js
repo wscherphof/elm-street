@@ -10,17 +10,21 @@ registerServiceWorker();
 
 (function port_map() {
   function moveend() {
-    var coordinate = ol.proj.toLonLat(getMap().getView().getCenter());
+    var view = getMap().getView();
+    var coordinate = ol.proj.toLonLat(view.getCenter());
     app.ports.mapMoved.send({
-      lon: coordinate[0],
-      lat: coordinate[1]
+      center: {
+        lon: coordinate[0],
+        lat: coordinate[1]
+      },
+      zoom: view.getZoom()
     });
   }
   
   app.ports.map.subscribe(function(msg) {
     switch (msg.Cmd) {
       case 'Fly':
-        fly(msg.lon, msg.lat);
+        fly(msg.lon, msg.lat, msg.zoom);
         break;
     }
   });
@@ -30,12 +34,12 @@ registerServiceWorker();
     fly(coordinate[0], coordinate[1]);
   }
   
-  function fly(lon, lat) {
+  function fly(lon, lat, zoom) {
     var coordinate = ol.proj.fromLonLat([lon, lat]);
     var view = getMap().getView();
-    var width = getMap().getSize()[0];
     view.animate({
       center: coordinate,
+      zoom: zoom,
       duration: 300
     });
 }

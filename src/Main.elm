@@ -9,21 +9,21 @@ import Material.Icon as Icon
 import Browser
 import Browser.Dom as Dom
 import Browser.Navigation as Nav
+import Http
 import Url
+import Url.Builder as Url
 import Url.Parser as Parser exposing (Parser, (</>), (<?>))
 import Url.Parser.Query as Query
+import Keyboard.Key as Key
+import Json.Encode as E
+import Json.Decode as D
+import Json.Decode.Extra as D
 import Task
 import List.Extra as List
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
-import Keyboard.Key as Key
-import Json.Encode as E
-import Http
-import Json.Decode as D
-import Json.Decode.Extra as D
-import Url.Builder as Url
 
 
 ---- HTTP ----
@@ -63,35 +63,30 @@ placeDecoder =
         (D.field "display_name" D.string)
 
 
-geocodeUrl : String -> String
-geocodeUrl q = 
-    Url.crossOrigin "https://nominatim.openstreetmap.org" ["search"]
-        [ Url.string "q" q
-        , Url.string "format" "json"
-        ]
-
-
-reverseUrl : String -> String -> String
-reverseUrl lon lat = 
-    Url.crossOrigin "https://nominatim.openstreetmap.org" ["reverse"]
-        [ Url.string "lon" lon
-        , Url.string "lat" lat
-        , Url.string "format" "json"
-        ]
-
-
-geocode : String -> Cmd Msg
-geocode q =
-    Http.send Geocode <| Http.get (geocodeUrl q) (D.list placeDecoder)
+geocode : String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+geocode q ( model, cmd ) =
+    let
+        url =
+            Url.crossOrigin "https://nominatim.openstreetmap.org" ["search"]
+                [ Url.string "q" q
+                , Url.string "format" "json"
+                ]
+    in
+    ( model, Cmd.batch
+        [ cmd
+        , Http.send Geocode <| Http.get url (D.list placeDecoder)
+        ] )
 
 
 reverseGeocode : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 reverseGeocode ( model, cmd ) =
     let
         url =
-            reverseUrl
-                (fieldValue "lon" model)
-                (fieldValue "lat" model)
+            Url.crossOrigin "https://nominatim.openstreetmap.org" ["reverse"]
+                [ Url.string "lon" <| fieldValue "lon" model
+                , Url.string "lat" <| fieldValue "lat" model
+                , Url.string "format" "json"
+                ]
     in
     ( model, Cmd.batch
         [ cmd
@@ -247,20 +242,23 @@ type alias Model =
     , url : Url.Url
     , key : Nav.Key
     , fields : Dict String FieldModel
+    , zoom : Float
     }
 
 
 defaultModel : Url.Url -> Nav.Key -> Model
 defaultModel url key =
-    { mdc = Material.defaultModel
-    , url = url
-    , key = key
-    , fields = Dict.fromList
-        [ ("lon", floatFieldModel)
-        , ("lat", floatFieldModel)
-        , ("place", defaultFieldModel)
-        ]
-    }
+    saveField "place" "onze lieve vrouwetoren, amersfoort"
+        { mdc = Material.defaultModel
+        , url = url
+        , key = key
+        , fields = Dict.fromList
+            [ ("lon", floatFieldModel)
+            , ("lat", floatFieldModel)
+            , ("place", defaultFieldModel)
+            ]
+        , zoom = 15
+        }
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
@@ -290,20 +288,39 @@ queryFloat param =
                 Nothing
 
 
+getZoom : Maybe Float -> Model -> Float
+getZoom maybeZoom model =
+    case maybeZoom of
+        Nothing ->
+            model.zoom
+    
+        Just zoom ->
+            if zoom < 0 then
+                0 - zoom
+            
+            else
+                zoom
+
+
+setZoom : Maybe Float -> Model -> Model
+setZoom maybeZoom model =
+    { model | zoom = model |> getZoom maybeZoom }
+
+
 routeParser : Parser (Route -> a) a
 routeParser =
     Parser.oneOf
         [ Parser.map Home    (Parser.top)
-        , Parser.map Search  (Parser.s "search" <?> Query.string "query")
-        , Parser.map Reverse (Parser.s "reverse" <?> queryFloat "lon" <?> queryFloat "lat")
+        , Parser.map Search  (Parser.s "search" <?> Query.string "query" <?> queryFloat "zoom")
+        , Parser.map Reverse (Parser.s "reverse" <?> queryFloat "lon" <?> queryFloat "lat" <?> queryFloat "zoom")
         ]
 
 
 type Route
     = Home
-    | Search (Maybe String)
-    | Reverse (Maybe Float) (Maybe Float)
-
+    | Search (Maybe String) (Maybe Float)
+    | Reverse (Maybe Float) (Maybe Float) (Maybe Float)
+            
 
 route : Model -> ( Model, Cmd Msg )
 route model =
@@ -314,17 +331,20 @@ route model =
         Just route_ ->
             case route_ of
                 Home ->
-                    ( model, geocode "onze lieve vrouwetoren, amersfoort" )
+                    navSearch ( model, Cmd.none )
             
-                Search maybeQ ->
-                    case maybeQ of
+                Search maybeQuery maybeZoom ->
+                    case maybeQuery of
                         Nothing ->
                             model |> toast "Geen zoekopdracht gevonden"
                     
                         Just query ->
-                            ( model, geocode query )
+                            geocode query
+                                ( model
+                                    |> setZoom maybeZoom
+                                , Cmd.none )
             
-                Reverse maybeLon maybeLat ->
+                Reverse maybeLon maybeLat maybeZoom ->
                     case maybeLon of
                         Nothing ->
                             model |> toast "Geen geldige lengtegraad"
@@ -342,12 +362,15 @@ route model =
                                         model |> toast "Geen geldige breedtegraad"
                                     
                                     else
-                                        ( model
-                                            |> saveField "lon" (String.fromFloat lon)
-                                            |> saveField "lat" (String.fromFloat lat)
-                                        , Cmd.none )
+                                        reverseGeocode
+                                            ( model
+                                                |> setZoom maybeZoom
+                                                |> saveField "lon"
+                                                    (String.fromFloat lon)
+                                                |> saveField "lat"
+                                                    (String.fromFloat lat)
+                                            , Cmd.none )
                                             |> mapMove
-                                            |> reverseGeocode
 
 
 navSearch : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -356,20 +379,31 @@ navSearch ( model, cmd ) =
         [ cmd
         , Nav.pushUrl model.key <| Url.relative [ "search" ]
             [ Url.string "query" <| fieldValue "place" model
+            , Url.string "zoom" <| String.fromFloat model.zoom
             ]
         ] )
 
-navReverse : String -> String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-navReverse lon lat ( model, cmd ) =
+
+navReverse : Maybe Float -> String -> String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+navReverse maybeZoom lon lat ( model, cmd ) =
     let
         lonValue =
             (getField "lon" model).format lon
 
         latValue =
             (getField "lat" model).format lat
+
+        ( zoomEqual, zoomString ) = 
+            case maybeZoom of
+                Nothing ->
+                    ( True, String.fromFloat model.zoom )
+            
+                Just zoom ->
+                    ( zoom == model.zoom, String.fromFloat zoom )
     in
     if lonValue == fieldValue "lon" model
-    && latValue == fieldValue "lat" model then
+    && latValue == fieldValue "lat" model
+    && zoomEqual then
         ( model, cmd )
 
     else
@@ -378,8 +412,10 @@ navReverse lon lat ( model, cmd ) =
             , Nav.pushUrl model.key <| Url.relative [ "reverse" ]
                 [ Url.string "lon" lonValue
                 , Url.string "lat" latValue
+                , Url.string "zoom" zoomString
                 ]
             ] )
+
 
 ---- UPDATE ----
 
@@ -387,6 +423,12 @@ navReverse lon lat ( model, cmd ) =
 type alias Coordinate =
     { lon : Float
     , lat : Float
+    }
+
+
+type alias MapView =
+    { center : Coordinate
+    , zoom : Float
     }
 
 
@@ -399,7 +441,7 @@ type Msg
     | FieldKey String Int
     | FieldInput String String
     | FieldChange String String
-    | MapMoved Coordinate
+    | MapMoved MapView
     | Geocode (Result Http.Error (List PlaceModel))
     | ReverseGeocode (Result Http.Error PlaceModel)
     
@@ -456,15 +498,13 @@ update msg model =
                 case field of
                     "lon" ->
                         ( model, Cmd.none )
-                            |> navReverse
-                                input
-                                (fieldValue "lat" model)
+                            |> navReverse Nothing
+                                input (fieldValue "lat" model)
                         
                     "lat" ->
                         ( model, Cmd.none )
-                            |> navReverse
-                                (fieldValue "lon" model)
-                                input
+                            |> navReverse Nothing
+                                (fieldValue "lon" model) input
                         
                     "place" ->
                         ( model |> saveField field input, Cmd.none )
@@ -473,11 +513,11 @@ update msg model =
                     _ ->
                         ( model, Cmd.none )
 
-        MapMoved coordinate ->
+        MapMoved mapView ->
             ( model, Cmd.none )
-                |> navReverse
-                    (String.fromFloat coordinate.lon)
-                    (String.fromFloat coordinate.lat)
+                |> navReverse (Just mapView.zoom)
+                    (String.fromFloat mapView.center.lon)
+                    (String.fromFloat mapView.center.lat)
                                 
         Geocode result ->
             case result of
@@ -504,12 +544,16 @@ update msg model =
                     , Cmd.none )
 
                 Err err ->
+                    let
+                       newmodel =
+                           model |> saveField "place" "" 
+                    in
                     case err of
                         Http.BadPayload _ _ ->
-                            ( model |> saveField "place" "", Cmd.none )
+                            ( newmodel, Cmd.none )
                         
                         _ ->
-                            model |> toast (httpErrorMessage err "omgekeerd geocoderen")
+                            newmodel |> toast (httpErrorMessage err "omgekeerd geocoderen")
 
 
 toast : String -> Model -> ( Model, Cmd Msg )
@@ -637,7 +681,7 @@ subscriptions model =
 ---- PORTS ----
 
 
-port mapMoved : (Coordinate -> msg) -> Sub msg
+port mapMoved : (MapView -> msg) -> Sub msg
 
 
 port map : E.Value -> Cmd msg
@@ -658,6 +702,7 @@ mapMove ( model, cmd ) =
             [ ("Cmd", E.string "Fly")
             , ("lon", E.float lon)
             , ("lat", E.float lat)
+            , ("zoom", E.float model.zoom)
             ]
         ] )
 
