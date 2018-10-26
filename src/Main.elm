@@ -629,7 +629,7 @@ ordinateTextField field label model =
 
 view : Model -> Browser.Document Msg
 view model =
-    { title = "Elm Map Demo"
+    { title = "Elm Street"
     , body =
         [ div []
             [ div [ id "place"
