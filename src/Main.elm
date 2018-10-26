@@ -331,7 +331,7 @@ route model =
             case route_ of
                 Home ->
                     navReverse_ False Nothing
-                        "5.38721" "52.15517"
+                        "-76.8163" "42.08842"
                         ( model, Cmd.none )
             
                 Search maybeQuery maybeZoom ->
