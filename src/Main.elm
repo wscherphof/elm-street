@@ -632,18 +632,6 @@ ordinateTextField field label model =
         []
 
 
-lift : Model -> Attribute msg
-lift model =
-    let
-        up =
-            (getField "lon" model).focused || (getField "lat" model).focused
-    in
-    classList
-        [ ("lift-up", up)
-        , ("lift-down", not up)
-        ]
-
-
 view : Model -> Browser.Document Msg
 view model =
     { title = "Elm Street"
@@ -672,8 +660,8 @@ view model =
                     ] []
                 ]
             , div [ id "lonlat"
-                , style "position" "absolute" , style "left" ".5em"
-                , lift model
+                , style "position" "absolute"
+                , style "bottom" "0", style "left" ".5em"
                 , style "max-width" "calc(100% - 1em - .5em - 1.375em - 6px)"
                 ]
                 [ ordinateTextField "lon" "Lengtegraad" model
