@@ -248,17 +248,16 @@ type alias Model =
 
 defaultModel : Url.Url -> Nav.Key -> Model
 defaultModel url key =
-    saveField "place" "onze lieve vrouwetoren, amersfoort"
-        { mdc = Material.defaultModel
-        , url = url
-        , key = key
-        , fields = Dict.fromList
-            [ ("lon", floatFieldModel)
-            , ("lat", floatFieldModel)
-            , ("place", defaultFieldModel)
-            ]
-        , zoom = 15
-        }
+    { mdc = Material.defaultModel
+    , url = url
+    , key = key
+    , fields = Dict.fromList
+        [ ("lon", floatFieldModel)
+        , ("lat", floatFieldModel)
+        , ("place", defaultFieldModel)
+        ]
+    , zoom = 15
+    }
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
@@ -331,7 +330,9 @@ route model =
         Just route_ ->
             case route_ of
                 Home ->
-                    navSearch ( model, Cmd.none )
+                    navReverse Nothing
+                        "5.38721" "52.15517"
+                        ( model, Cmd.none )
             
                 Search maybeQuery maybeZoom ->
                     case maybeQuery of
