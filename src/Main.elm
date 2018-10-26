@@ -262,24 +262,27 @@ defaultModel url key =
     }
 
 
-validateLon : Maybe Float -> Bool
-validateLon maybeFloat =
-    case maybeFloat of
+validateLonLat : Maybe Float -> Maybe Float -> Maybe ( String, String )
+validateLonLat maybeLon maybeLat =
+    case maybeLon of
         Nothing ->
-            False
+            Nothing
 
-        Just float ->
-            float >= -180 && float <= 180
+        Just lon ->
+            if lon < -180 || lon > 180 then
+                Nothing
+            
+            else
+                case maybeLat of
+                    Nothing ->
+                        Nothing
 
-
-validateLat : Maybe Float -> Bool
-validateLat maybeFloat =
-    case maybeFloat of
-        Nothing ->
-            False
-
-        Just float ->
-            float >= -90 && float <= 90
+                    Just lat ->
+                        if lat < -90 || lat > 90 then
+                            Nothing
+                        
+                        else
+                            Just ( String.fromFloat lon, String.fromFloat lat )
 
 
 validatePlace : Maybe String -> Bool
@@ -377,19 +380,18 @@ route model =
                         model |> toast "Geen geldige zoekopdracht"
             
                 Reverse maybeLon maybeLat maybeZoom ->
-                    if (validateLon maybeLon) && (validateLat maybeLat) then
-                        reverseGeocode
-                            ( model
-                                |> setZoom maybeZoom
-                                |> saveField "lon"
-                                    (String.fromFloat <| Maybe.withDefault 0 maybeLon)
-                                |> saveField "lat"
-                                    (String.fromFloat <| Maybe.withDefault 0 maybeLat)
-                            , Cmd.none )
-                            |> mapMove
+                    case validateLonLat maybeLon maybeLat of
+                        Nothing ->
+                            model |> toast "Geen geldige coördinaten"
                     
-                    else
-                        model |> toast "Geen geldige coördinaten"
+                        Just ( lon, lat ) ->
+                            reverseGeocode
+                                ( model
+                                    |> setZoom maybeZoom
+                                    |> saveField "lon" lon
+                                    |> saveField "lat" lat
+                                , Cmd.none )
+                                |> mapMove
 
 
 navSearch : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -531,22 +533,24 @@ update msg model =
         FieldChange field input ->
             case field of
                 "lon" ->
-                    if validateLon <| String.toFloat input then
-                        navReverse Nothing
-                            input (fieldValue "lat" model)
-                            ( model, Cmd.none )
+                    case validateLonLat (String.toFloat input) (String.toFloat <| fieldValue "lat" model) of
+                        Nothing ->
+                            ( model |> untypeField field, Cmd.none )
                     
-                    else
-                        ( model |> untypeField field, Cmd.none )
+                        Just ( lon, lat ) ->
+                            navReverse Nothing
+                                lon lat
+                                ( model, Cmd.none )
                     
                 "lat" ->
-                    if validateLat <| String.toFloat input then
-                        navReverse Nothing
-                            (fieldValue "lon" model) input
-                            ( model, Cmd.none )
+                    case validateLonLat (String.toFloat <| fieldValue "lon" model) (String.toFloat input) of
+                        Nothing ->
+                            ( model |> untypeField field, Cmd.none )
                     
-                    else
-                        ( model |> untypeField field, Cmd.none )
+                        Just ( lon, lat ) ->
+                            navReverse Nothing
+                                lon lat
+                                ( model, Cmd.none )
                     
                 "place" ->
                     if validatePlace <| Just input then
