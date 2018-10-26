@@ -540,7 +540,7 @@ update msg model =
                         ( model |> untypeField field, Cmd.none )
                     
                 "lat" ->
-                    if validateLon <| String.toFloat input then
+                    if validateLat <| String.toFloat input then
                         navReverse Nothing
                             (fieldValue "lon" model) input
                             ( model, Cmd.none )
