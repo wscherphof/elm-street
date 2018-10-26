@@ -125,7 +125,6 @@ untypeField : String -> Model -> Model
 untypeField field model =
     model
         |> typeField field (fieldValue field model)
-        |> focusField field False
 
 
 saveField : String -> String -> Model -> Model
@@ -453,6 +452,7 @@ type Msg
     | UrlRequest Browser.UrlRequest
     | UrlChange Url.Url
     | FieldFocus String
+    | FieldBlur String
     | FieldKey String Int
     | FieldInput String String
     | FieldChange String String
@@ -486,6 +486,10 @@ update msg model =
             , if (getField field model).select
                 then selectText <| "textfield-" ++ field ++ "-native"
                 else Cmd.none )
+
+        FieldBlur field ->
+            ( model |> focusField field False
+            , Cmd.none )
         
         FieldKey field code ->
             let
@@ -494,7 +498,7 @@ update msg model =
             in
             case (Key.fromCode code) of
                 Key.Enter ->
-                    ( model |> focusField field False, blur )
+                    ( model, blur )
                 
                 Key.Escape ->
                     ( model |> untypeField field, blur )
@@ -621,10 +625,23 @@ ordinateTextField field label model =
             [ Options.id (index ++ "-native")
             , Options.attribute <| size 10
             , Options.onFocus (FieldFocus field)
+            , Options.onBlur (FieldBlur field)
             , Options.on "keydown" <| D.map (FieldKey field) keyCode
             ]
         ]
         []
+
+
+lift : Model -> Attribute msg
+lift model =
+    let
+        up =
+            (getField "lon" model).focused || (getField "lat" model).focused
+    in
+    classList
+        [ ("lift-up", up)
+        , ("lift-down", not up)
+        ]
 
 
 view : Model -> Browser.Document Msg
@@ -649,13 +666,14 @@ view model =
                     , Textfield.nativeControl
                         [ Options.id "textfield-place-native"
                         , Options.onFocus (FieldFocus "place")
+                        , Options.onBlur (FieldBlur "place")
                         , Options.on "keydown" <| D.map (FieldKey "place") keyCode
                         ]
                     ] []
                 ]
             , div [ id "lonlat"
-                , style "position" "absolute"
-                , style "bottom" "0", style "left" ".5em"
+                , style "position" "absolute" , style "left" ".5em"
+                , lift model
                 , style "max-width" "calc(100% - 1em - .5em - 1.375em - 6px)"
                 ]
                 [ ordinateTextField "lon" "Lengtegraad" model
