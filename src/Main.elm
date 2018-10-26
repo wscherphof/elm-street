@@ -150,7 +150,6 @@ updateField field maybeTyped maybeSaved model =
                             Just { fieldModel
                             | saved = formatted
                             , typed = formatted
-                            , focused = False
                             }
 
                         Nothing ->
@@ -180,60 +179,64 @@ focusField field focused model =
 
 defaultFieldModel : FieldModel
 defaultFieldModel =
-    FieldModel "" "" False True <| \v -> v
+    FieldModel "" "" False True (\v -> v)
+
+
+floatFormat : String -> String
+floatFormat input =
+    case (String.toFloat input) of
+        Nothing ->
+            ""
+            
+        Just float ->
+            let
+                parts =
+                    String.split "." input
+                
+                first =
+                    List.head parts |> Maybe.withDefault ""
+                
+                last =
+                    List.last parts |> Maybe.withDefault ""
+            in
+            if List.length parts == 2 && String.length last > 5 then
+                let
+                    fraction =
+                        String.toFloat ("0.1" ++ last) |> Maybe.withDefault 0
+
+                    decimals =
+                        round (fraction * 1000000)
+                    
+                    front =
+                        if decimals == 200000 then
+                            let
+                                num =
+                                    String.toInt first |> Maybe.withDefault 0
+                                
+                                next =
+                                    abs num + 1
+                                
+                                val =
+                                    if num < 0 then
+                                        0 - next
+                                    
+                                    else
+                                        next
+                            in
+                            String.fromInt val
+                        
+                        else
+                            first
+                in
+                front ++ "." ++ (String.dropLeft 1 <| String.fromInt decimals)
+
+            else
+                input
 
 
 floatFieldModel : FieldModel
 floatFieldModel =
-    FieldModel "" "" False False <| \input ->
-        case (String.toFloat input) of
-            Nothing ->
-                ""
-                
-            Just float ->
-                let
-                    parts =
-                        String.split "." input
-                    
-                    first =
-                        List.head parts |> Maybe.withDefault ""
-                    
-                    last =
-                        List.last parts |> Maybe.withDefault ""
-                in
-                if List.length parts == 2 && String.length last > 5 then
-                    let
-                        fraction =
-                            String.toFloat ("0.1" ++ last) |> Maybe.withDefault 0
-
-                        decimals =
-                            round (fraction * 1000000)
-                        
-                        front =
-                            if decimals == 200000 then
-                                let
-                                    num =
-                                        String.toInt first |> Maybe.withDefault 0
-                                    
-                                    next =
-                                        abs num + 1
-                                    
-                                    val =
-                                        if num < 0 then
-                                            0 - next
-                                        
-                                        else
-                                            next
-                                in
-                                String.fromInt val
-                            
-                            else
-                                first
-                    in
-                    front ++ "." ++ (String.dropLeft 1 <| String.fromInt decimals)
-
-                else
-                    input
+    FieldModel "" "" False False floatFormat
 
 
 type alias Model =
@@ -257,6 +260,36 @@ defaultModel url key =
         ]
     , zoom = 15
     }
+
+
+validateLon : Maybe Float -> Bool
+validateLon maybeFloat =
+    case maybeFloat of
+        Nothing ->
+            False
+
+        Just float ->
+            float >= -180 && float <= 180
+
+
+validateLat : Maybe Float -> Bool
+validateLat maybeFloat =
+    case maybeFloat of
+        Nothing ->
+            False
+
+        Just float ->
+            float >= -90 && float <= 90
+
+
+validatePlace : Maybe String -> Bool
+validatePlace maybeString =
+    case maybeString of
+        Nothing ->
+            False
+    
+        Just string ->
+            string /= "" 
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
@@ -334,43 +367,29 @@ route model =
                         ( model, Cmd.none )
             
                 Search maybeQuery maybeZoom ->
-                    case maybeQuery of
-                        Nothing ->
-                            model |> toast "Geen zoekopdracht gevonden"
-                    
-                        Just query ->
-                            geocode query
-                                ( model
-                                    |> setZoom maybeZoom
-                                , Cmd.none )
+                    if validatePlace maybeQuery then
+                        geocode (Maybe.withDefault "" maybeQuery)
+                            ( model
+                                |> setZoom maybeZoom
+                            , Cmd.none )
+
+                    else
+                        model |> toast "Geen geldige zoekopdracht"
             
                 Reverse maybeLon maybeLat maybeZoom ->
-                    case maybeLon of
-                        Nothing ->
-                            model |> toast "Geen geldige lengtegraad"
+                    if (validateLon maybeLon) && (validateLat maybeLat) then
+                        reverseGeocode
+                            ( model
+                                |> setZoom maybeZoom
+                                |> saveField "lon"
+                                    (String.fromFloat <| Maybe.withDefault 0 maybeLon)
+                                |> saveField "lat"
+                                    (String.fromFloat <| Maybe.withDefault 0 maybeLat)
+                            , Cmd.none )
+                            |> mapMove
                     
-                        Just lon ->
-                            case maybeLat of
-                                Nothing ->
-                                    model |> toast "Geen geldige breedtegraad"
-                            
-                                Just lat ->
-                                    if lon > 180 || lon < -180 then
-                                        model |> toast "Geen geldige lengtegraad"
-
-                                    else if lat > 90 || lat < -90 then
-                                        model |> toast "Geen geldige breedtegraad"
-                                    
-                                    else
-                                        reverseGeocode
-                                            ( model
-                                                |> setZoom maybeZoom
-                                                |> saveField "lon"
-                                                    (String.fromFloat lon)
-                                                |> saveField "lat"
-                                                    (String.fromFloat lat)
-                                            , Cmd.none )
-                                            |> mapMove
+                    else
+                        model |> toast "Geen geldige coördinaten"
 
 
 navSearch : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -389,7 +408,7 @@ navReverse maybeZoom lon lat ( model, cmd ) =
     navReverse_ True maybeZoom lon lat ( model, cmd )
 
 
-navReverse_ :  Bool -> Maybe Float -> String -> String -> ( Model, Cmd Msg ) ->( Model, Cmd Msg )
+navReverse_ :  Bool -> Maybe Float -> String -> String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 navReverse_ push maybeZoom lon lat ( model, cmd ) =
     let
         lonValue =
@@ -510,33 +529,41 @@ update msg model =
             ( model |> typeField field input, Cmd.none )
 
         FieldChange field input ->
-            if input == "" then
-                ( model |> untypeField field, Cmd.none )
-            
-            else
-                case field of
-                    "lon" ->
-                        ( model, Cmd.none )
-                            |> navReverse Nothing
-                                input (fieldValue "lat" model)
-                        
-                    "lat" ->
-                        ( model, Cmd.none )
-                            |> navReverse Nothing
-                                (fieldValue "lon" model) input
-                        
-                    "place" ->
-                        ( model |> saveField field input, Cmd.none )
-                            |> navSearch
+            case field of
+                "lon" ->
+                    if validateLon <| String.toFloat input then
+                        navReverse Nothing
+                            input (fieldValue "lat" model)
+                            ( model, Cmd.none )
                     
-                    _ ->
-                        ( model, Cmd.none )
+                    else
+                        ( model |> untypeField field, Cmd.none )
+                    
+                "lat" ->
+                    if validateLon <| String.toFloat input then
+                        navReverse Nothing
+                            (fieldValue "lon" model) input
+                            ( model, Cmd.none )
+                    
+                    else
+                        ( model |> untypeField field, Cmd.none )
+                    
+                "place" ->
+                    if validatePlace <| Just input then
+                        navSearch
+                            ( model |> saveField field input, Cmd.none )
+                    
+                    else
+                        ( model |> untypeField field, Cmd.none )
+                
+                _ ->
+                    ( model, Cmd.none )
 
         MapMoved mapView ->
-            ( model, Cmd.none )
-                |> navReverse (Just mapView.zoom)
-                    (String.fromFloat mapView.center.lon)
-                    (String.fromFloat mapView.center.lat)
+            navReverse (Just mapView.zoom)
+                (String.fromFloat mapView.center.lon)
+                (String.fromFloat mapView.center.lat)
+                ( model, Cmd.none )
                                 
         Geocode result ->
             case result of
