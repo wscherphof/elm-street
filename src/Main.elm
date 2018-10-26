@@ -330,7 +330,7 @@ route model =
         Just route_ ->
             case route_ of
                 Home ->
-                    navReverse Nothing
+                    navReverse_ False Nothing
                         "5.38721" "52.15517"
                         ( model, Cmd.none )
             
@@ -387,6 +387,11 @@ navSearch ( model, cmd ) =
 
 navReverse : Maybe Float -> String -> String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 navReverse maybeZoom lon lat ( model, cmd ) =
+    navReverse_ True maybeZoom lon lat ( model, cmd )
+
+
+navReverse_ :  Bool -> Maybe Float -> String -> String -> ( Model, Cmd Msg ) ->( Model, Cmd Msg )
+navReverse_ push maybeZoom lon lat ( model, cmd ) =
     let
         lonValue =
             (getField "lon" model).format lon
@@ -408,9 +413,18 @@ navReverse maybeZoom lon lat ( model, cmd ) =
         ( model, cmd )
 
     else
+        let
+            fn =
+                case push of
+                    True ->
+                        Nav.pushUrl
+                
+                    False ->
+                        Nav.replaceUrl
+        in
         ( model, Cmd.batch
             [ cmd
-            , Nav.pushUrl model.key <| Url.relative [ "reverse" ]
+            , fn model.key <| Url.relative [ "reverse" ]
                 [ Url.string "lon" lonValue
                 , Url.string "lat" latValue
                 , Url.string "zoom" zoomString
