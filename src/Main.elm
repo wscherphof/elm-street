@@ -282,7 +282,8 @@ validateLonLat maybeLon maybeLat =
                             Nothing
                         
                         else
-                            Just ( String.fromFloat lon, String.fromFloat lat )
+                            Just ( floatFormat <| String.fromFloat lon
+                            , floatFormat <|String.fromFloat lat )
 
 
 validatePlace : Maybe String -> Bool
@@ -328,23 +329,14 @@ queryFloat param =
                 Nothing
 
 
-getZoom : Maybe Float -> Model -> Float
-getZoom maybeZoom model =
-    case maybeZoom of
-        Nothing ->
-            model.zoom
-    
-        Just zoom ->
-            if zoom < 0 then
-                0 - zoom
-            
-            else
-                zoom
-
-
 setZoom : Maybe Float -> Model -> Model
 setZoom maybeZoom model =
-    { model | zoom = model |> getZoom maybeZoom }
+    case maybeZoom of
+        Nothing ->
+            model
+    
+        Just zoom ->
+            { model | zoom = zoom }
 
 
 routeParser : Parser (Route -> a) a
@@ -420,10 +412,10 @@ navReverse_ :  (Nav.Key -> String -> Cmd Msg) -> Maybe Float -> String -> String
 navReverse_ nav maybeZoom lon lat ( model, cmd ) =
     let
         lonValue =
-            (getField "lon" model).format lon
+            floatFormat lon
 
         latValue =
-            (getField "lat" model).format lat
+            floatFormat lat
 
         ( zoomEqual, zoomString ) = 
             case maybeZoom of
