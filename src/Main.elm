@@ -262,8 +262,8 @@ defaultModel url key =
     }
 
 
-validateLonLat : Maybe Float -> Maybe Float -> Maybe ( String, String )
-validateLonLat maybeLon maybeLat =
+validateLonLat : ( Maybe Float, Maybe Float ) -> Maybe ( String, String )
+validateLonLat ( maybeLon, maybeLat ) =
     case maybeLon of
         Nothing ->
             Nothing
@@ -282,8 +282,9 @@ validateLonLat maybeLon maybeLat =
                             Nothing
                         
                         else
-                            Just ( floatFormat <| String.fromFloat lon
-                            , floatFormat <|String.fromFloat lat )
+                            Just <| mapBothSame
+                                (\v -> floatFormat <| String.fromFloat v)
+                                ( lon, lat )
 
 
 validatePlace : Maybe String -> Maybe String
@@ -314,9 +315,7 @@ init _ url key =
 
 
 elmStreet =
-    { lon = "-76.8163"
-    , lat = "42.08842"
-    }
+    ( "-76.8163", "42.08842" )
 
 
 ---- ROUTES ----
@@ -368,8 +367,7 @@ route model =
             case route_ of
                 Home ->
                     navReverse_ Nav.replaceUrl Nothing
-                        elmStreet.lon elmStreet.lat
-                        ( model, Cmd.none )
+                        elmStreet ( model, Cmd.none )
             
                 Search maybeQuery maybeZoom ->
                     case validatePlace maybeQuery of
@@ -383,16 +381,16 @@ route model =
                                 , Cmd.none )
             
                 Reverse maybeLon maybeLat maybeZoom ->
-                    case validateLonLat maybeLon maybeLat of
+                    case validateLonLat ( maybeLon, maybeLat ) of
                         Nothing ->
                             model |> toast "Geen geldige coördinaten"
                     
-                        Just ( lon, lat ) ->
+                        Just ( lonString, latString ) ->
                             reverseGeocode
                                 ( model
                                     |> setZoom maybeZoom
-                                    |> saveField "lon" lon
-                                    |> saveField "lat" lat
+                                    |> saveField "lon" lonString
+                                    |> saveField "lat" latString
                                 , Cmd.none )
                                 |> mapMove
 
@@ -408,19 +406,16 @@ navSearch ( model, cmd ) =
         ] )
 
 
-navReverse : Maybe Float -> String -> String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-navReverse maybeZoom lon lat ( model, cmd ) =
-    navReverse_ Nav.pushUrl maybeZoom lon lat ( model, cmd )
+navReverse : Maybe Float -> ( String, String ) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+navReverse maybeZoom ( lon, lat ) ( model, cmd ) =
+    navReverse_ Nav.pushUrl maybeZoom ( lon, lat ) ( model, cmd )
 
 
-navReverse_ :  (Nav.Key -> String -> Cmd Msg) -> Maybe Float -> String -> String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-navReverse_ nav maybeZoom lon lat ( model, cmd ) =
+navReverse_ : (Nav.Key -> String -> Cmd Msg) -> Maybe Float -> ( String, String ) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+navReverse_ nav maybeZoom ( lon, lat ) ( model, cmd ) =
     let
-        lonValue =
-            floatFormat lon
-
-        latValue =
-            floatFormat lat
+        ( lonValue, latValue ) =
+            mapBothSame floatFormat ( lon, lat )
 
         ( zoomEqual, zoomString ) = 
             case maybeZoom of
@@ -509,10 +504,10 @@ update msg model =
         FieldKey field code ->
             case (Key.fromCode code) of
                 Key.Enter ->
-                    ( model, blur field)
+                    ( model, blur field )
                 
                 Key.Escape ->
-                    ( model |> untypeField field, blur field)
+                    ( model |> untypeField field, blur field )
                 
                 _ ->
                     ( model, Cmd.none )
@@ -533,19 +528,19 @@ update msg model =
                 
                 "lon" ->
                     lonLatChange field model
-                        input (fieldValue "lat" model)
+                        ( input, fieldValue "lat" model )
                     
                 "lat" ->
                     lonLatChange field model
-                        (fieldValue "lon" model) input
+                        ( fieldValue "lon" model, input )
                     
                 _ ->
                     ( model, Cmd.none )
 
         MapMoved mapView ->
             navReverse (Just mapView.zoom)
-                (String.fromFloat mapView.center.lon)
-                (String.fromFloat mapView.center.lat)
+                (mapBothSame String.fromFloat
+                    ( mapView.center.lon, mapView.center.lat ))
                 ( model, Cmd.none )
                                 
         Geocode result ->
@@ -585,14 +580,14 @@ update msg model =
                             newmodel |> toast (httpErrorMessage err "omgekeerd geocoderen")
 
 
-lonLatChange : String -> Model -> String -> String -> ( Model, Cmd Msg )
-lonLatChange field model lonString latString =
-    case validateLonLat (String.toFloat lonString) (String.toFloat latString) of
+lonLatChange : String -> Model -> ( String, String ) -> ( Model, Cmd Msg )
+lonLatChange field model ( lon, lat ) =
+    case validateLonLat <| mapBothSame String.toFloat ( lon, lat ) of
         Nothing ->
             ( model |> untypeField field, Cmd.none )
     
-        Just ( lon, lat ) ->
-            navReverse Nothing lon lat ( model, Cmd.none )
+        Just ( lonString, latString ) ->
+            navReverse Nothing ( lonString, latString ) ( model, Cmd.none )
 
 
 blur : String -> Cmd Msg
@@ -777,3 +772,8 @@ main =
         , onUrlChange = UrlChange
         , onUrlRequest = UrlRequest
         }
+
+
+mapBothSame : (a -> x) -> ( a, a ) -> ( x, x )
+mapBothSame fn tuple =
+    Tuple.mapBoth fn fn tuple
