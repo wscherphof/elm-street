@@ -735,21 +735,19 @@ port mapMoved : (MapView -> msg) -> Sub msg
 port map : E.Value -> Cmd msg
 
 
+floatValue : String -> Model -> Float
+floatValue field model =
+    String.toFloat (fieldValue field model) |> Maybe.withDefault 0 
+
+
 mapMove : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 mapMove ( model, cmd ) =
-    let
-        lon =
-           String.toFloat (fieldValue "lon" model) |> Maybe.withDefault 0 
-
-        lat =
-           String.toFloat (fieldValue "lat" model) |> Maybe.withDefault 0 
-    in
     ( model, Cmd.batch
         [ cmd
         , map <| E.object
             [ ("Cmd", E.string "Fly")
-            , ("lon", E.float lon)
-            , ("lat", E.float lat)
+            , ("lon", E.float <| floatValue "lon" model)
+            , ("lat", E.float <| floatValue "lat" model)
             , ("zoom", E.float model.zoom)
             ]
         ] )
