@@ -286,14 +286,18 @@ validateLonLat maybeLon maybeLat =
                             , floatFormat <|String.fromFloat lat )
 
 
-validatePlace : Maybe String -> Bool
+validatePlace : Maybe String -> Maybe String
 validatePlace maybeString =
     case maybeString of
         Nothing ->
-            False
+            Nothing
     
         Just string ->
-            string /= "" 
+            if string == "" then
+                Nothing
+
+            else
+                Just string
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
@@ -368,14 +372,15 @@ route model =
                         ( model, Cmd.none )
             
                 Search maybeQuery maybeZoom ->
-                    if not (validatePlace maybeQuery) then
-                        model |> toast "Geen geldige zoekopdracht"
-
-                    else
-                        geocode (Maybe.withDefault "" maybeQuery)
-                            ( model
-                                |> setZoom maybeZoom
-                            , Cmd.none )
+                    case validatePlace maybeQuery of
+                        Nothing ->
+                            model |> toast "Geen geldige zoekopdracht"
+                    
+                        Just query ->
+                            geocode query
+                                ( model
+                                    |> setZoom maybeZoom
+                                , Cmd.none )
             
                 Reverse maybeLon maybeLat maybeZoom ->
                     case validateLonLat maybeLon maybeLat of
@@ -538,12 +543,13 @@ update msg model =
                                 ( model, Cmd.none )
                     
                 "place" ->
-                    if not (validatePlace <| Just input) then
-                        ( model |> untypeField field, Cmd.none )
-                    
-                    else
-                        navSearch
-                            ( model |> saveField field input, Cmd.none )
+                    case validatePlace <| Just input of
+                        Nothing ->
+                            ( model |> untypeField field, Cmd.none )
+                            
+                        Just place ->
+                            navSearch
+                                ( model |> saveField field place, Cmd.none )
                 
                 _ ->
                     ( model, Cmd.none )
