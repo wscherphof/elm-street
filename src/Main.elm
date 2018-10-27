@@ -522,26 +522,6 @@ update msg model =
 
         FieldChange field input ->
             case field of
-                "lon" ->
-                    case validateLonLat (String.toFloat input) (String.toFloat <| fieldValue "lat" model) of
-                        Nothing ->
-                            ( model |> untypeField field, Cmd.none )
-                    
-                        Just ( lon, lat ) ->
-                            navReverse Nothing
-                                lon lat
-                                ( model, Cmd.none )
-                    
-                "lat" ->
-                    case validateLonLat (String.toFloat <| fieldValue "lon" model) (String.toFloat input) of
-                        Nothing ->
-                            ( model |> untypeField field, Cmd.none )
-                    
-                        Just ( lon, lat ) ->
-                            navReverse Nothing
-                                lon lat
-                                ( model, Cmd.none )
-                    
                 "place" ->
                     case validatePlace <| Just input of
                         Nothing ->
@@ -551,6 +531,14 @@ update msg model =
                             navSearch
                                 ( model |> saveField field place, Cmd.none )
                 
+                "lon" ->
+                    lonLatChange field model
+                        input (fieldValue "lat" model)
+                    
+                "lat" ->
+                    lonLatChange field model
+                        (fieldValue "lon" model) input
+                    
                 _ ->
                     ( model, Cmd.none )
 
@@ -595,6 +583,16 @@ update msg model =
                         
                         _ ->
                             newmodel |> toast (httpErrorMessage err "omgekeerd geocoderen")
+
+
+lonLatChange : String -> Model -> String -> String -> ( Model, Cmd Msg )
+lonLatChange field model lonString latString =
+    case validateLonLat (String.toFloat lonString) (String.toFloat latString) of
+        Nothing ->
+            ( model |> untypeField field, Cmd.none )
+    
+        Just ( lon, lat ) ->
+            navReverse Nothing lon lat ( model, Cmd.none )
 
 
 blur : String -> Cmd Msg
