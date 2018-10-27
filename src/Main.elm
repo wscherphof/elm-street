@@ -85,6 +85,7 @@ reverseGeocode ( model, cmd ) =
             Url.crossOrigin "https://nominatim.openstreetmap.org" ["reverse"]
                 [ Url.string "lon" <| fieldValue "lon" model
                 , Url.string "lat" <| fieldValue "lat" model
+                , Url.int "zoom" <| round model.zoom
                 , Url.string "format" "json"
                 ]
     in
@@ -258,7 +259,7 @@ defaultModel url key =
         , ("lat", lonLatFieldModel)
         , ("place", defaultFieldModel)
         ]
-    , zoom = 15
+    , zoom = 16
     }
 
 
@@ -315,7 +316,7 @@ init _ url key =
 
 
 elmStreet =
-    ( "-76.8163", "42.08842" )
+    ( "-76.81645", "42.08871" )
 
 
 ---- ROUTES ----
