@@ -234,8 +234,8 @@ floatFormat input =
                 input
 
 
-floatFieldModel : FieldModel
-floatFieldModel =
+lonLatFieldModel : FieldModel
+lonLatFieldModel =
     FieldModel "" "" False False floatFormat
 
 
@@ -254,8 +254,8 @@ defaultModel url key =
     , url = url
     , key = key
     , fields = Dict.fromList
-        [ ("lon", floatFieldModel)
-        , ("lat", floatFieldModel)
+        [ ("lon", lonLatFieldModel)
+        , ("lat", lonLatFieldModel)
         , ("place", defaultFieldModel)
         ]
     , zoom = 15
@@ -306,6 +306,12 @@ init _ url key =
         , cmd
         ]
     )
+
+
+elmStreet =
+    { lon = "-76.8163"
+    , lat = "42.08842"
+    }
 
 
 ---- ROUTES ----
@@ -360,24 +366,24 @@ route : Model -> ( Model, Cmd Msg )
 route model =
     case Parser.parse routeParser model.url of
         Nothing ->
-            ( model, Nav.pushUrl model.key "/" )
+            ( model, Nav.replaceUrl model.key "/" )
 
         Just route_ ->
             case route_ of
                 Home ->
-                    navReverse_ False Nothing
-                        "-76.8163" "42.08842"
+                    navReverse_ Nav.replaceUrl Nothing
+                        elmStreet.lon elmStreet.lat
                         ( model, Cmd.none )
             
                 Search maybeQuery maybeZoom ->
-                    if validatePlace maybeQuery then
+                    if not (validatePlace maybeQuery) then
+                        model |> toast "Geen geldige zoekopdracht"
+
+                    else
                         geocode (Maybe.withDefault "" maybeQuery)
                             ( model
                                 |> setZoom maybeZoom
                             , Cmd.none )
-
-                    else
-                        model |> toast "Geen geldige zoekopdracht"
             
                 Reverse maybeLon maybeLat maybeZoom ->
                     case validateLonLat maybeLon maybeLat of
@@ -407,11 +413,11 @@ navSearch ( model, cmd ) =
 
 navReverse : Maybe Float -> String -> String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 navReverse maybeZoom lon lat ( model, cmd ) =
-    navReverse_ True maybeZoom lon lat ( model, cmd )
+    navReverse_ Nav.pushUrl maybeZoom lon lat ( model, cmd )
 
 
-navReverse_ :  Bool -> Maybe Float -> String -> String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-navReverse_ push maybeZoom lon lat ( model, cmd ) =
+navReverse_ :  (Nav.Key -> String -> Cmd Msg) -> Maybe Float -> String -> String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+navReverse_ nav maybeZoom lon lat ( model, cmd ) =
     let
         lonValue =
             (getField "lon" model).format lon
@@ -433,18 +439,9 @@ navReverse_ push maybeZoom lon lat ( model, cmd ) =
         ( model, cmd )
 
     else
-        let
-            fn =
-                case push of
-                    True ->
-                        Nav.pushUrl
-                
-                    False ->
-                        Nav.replaceUrl
-        in
         ( model, Cmd.batch
             [ cmd
-            , fn model.key <| Url.relative [ "reverse" ]
+            , nav model.key <| Url.relative [ "reverse" ]
                 [ Url.string "lon" lonValue
                 , Url.string "lat" latValue
                 , Url.string "zoom" zoomString
@@ -513,16 +510,12 @@ update msg model =
             , Cmd.none )
         
         FieldKey field code ->
-            let
-                blur =
-                    Task.attempt (\_ -> NoOp) <| Dom.blur ("textfield-" ++ field ++ "-native")
-            in
             case (Key.fromCode code) of
                 Key.Enter ->
-                    ( model, blur )
+                    ( model, blur field)
                 
                 Key.Escape ->
-                    ( model |> untypeField field, blur )
+                    ( model |> untypeField field, blur field)
                 
                 _ ->
                     ( model, Cmd.none )
@@ -553,12 +546,12 @@ update msg model =
                                 ( model, Cmd.none )
                     
                 "place" ->
-                    if validatePlace <| Just input then
-                        navSearch
-                            ( model |> saveField field input, Cmd.none )
+                    if not (validatePlace <| Just input) then
+                        ( model |> untypeField field, Cmd.none )
                     
                     else
-                        ( model |> untypeField field, Cmd.none )
+                        navSearch
+                            ( model |> saveField field input, Cmd.none )
                 
                 _ ->
                     ( model, Cmd.none )
@@ -606,6 +599,11 @@ update msg model =
                             newmodel |> toast (httpErrorMessage err "omgekeerd geocoderen")
 
 
+blur : String -> Cmd Msg
+blur field =
+    Task.attempt (\_ -> NoOp) <| Dom.blur ("textfield-" ++ field ++ "-native")
+
+
 toast : String -> Model -> ( Model, Cmd Msg )
 toast message model =
     let
@@ -628,11 +626,13 @@ whiteTransparentBackground =
 textfieldValue : String -> Model -> Textfield.Property m
 textfieldValue field model =
     let
-        fieldModel = getField field model
+        fieldModel =
+            getField field model
 
-        value_ = if fieldModel.focused
-            then fieldModel.typed
-            else fieldModel.saved
+        value_ =
+            if fieldModel.focused
+                then fieldModel.typed
+                else fieldModel.saved
     in
     Textfield.value value_
 
