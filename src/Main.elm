@@ -245,17 +245,6 @@ lonLatFieldModel defaultValue =
     FieldModel (floatFormat defaultValue) (floatFormat defaultValue) False False floatFormat
 
 
-type alias Model =
-    { mdc : Material.Model Msg
-    , url : Url.Url
-    , key : Nav.Key
-    , fields : Dict String FieldModel
-    , zoom : Float
-    , geoJson : Maybe GeoJson.GeoJson
-    , moving : Bool
-    }
-
-
 validateLonLat : ( Maybe Float, Maybe Float ) -> Maybe ( String, String )
 validateLonLat ( maybeLon, maybeLat ) =
     case maybeLon of
@@ -293,6 +282,18 @@ validatePlace maybeString =
 
             else
                 Just string
+
+
+type alias Model =
+    { mdc : Material.Model Msg
+    , url : Url.Url
+    , key : Nav.Key
+    , fields : Dict String FieldModel
+    , zoom : Float
+    , geoJson : Maybe GeoJson.GeoJson
+    , moving : Bool
+    , places : List PlaceModel
+    }
 
 
 defaultModel : Url.Url -> Nav.Key -> Model
