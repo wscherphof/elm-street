@@ -6,6 +6,7 @@ import Material.Options as Options
 import Material.Textfield as Textfield
 import Material.Snackbar as Snackbar
 import Material.Icon as Icon
+import Material.Menu as Menu
 import Browser
 import Browser.Dom as Dom
 import Browser.Navigation as Nav
@@ -66,8 +67,8 @@ placeDecoder =
         (D.field "geojson" GeoJson.decoder)
 
 
-geocode : String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-geocode q ( model, cmd ) =
+geocode : String -> Model -> ( Model, Cmd Msg )
+geocode q model =
     let
         url =
             Url.crossOrigin "https://nominatim.openstreetmap.org" ["search"]
@@ -76,14 +77,11 @@ geocode q ( model, cmd ) =
                 , Url.int "polygon_geojson" 1
                 ]
     in
-    ( model, Cmd.batch
-        [ cmd
-        , Http.send Geocode <| Http.get url (D.list placeDecoder)
-        ] )
+    ( model, Http.send Geocode <| Http.get url (D.list placeDecoder) )
 
 
-reverseGeocode : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-reverseGeocode ( model, cmd ) =
+reverseGeocode : Model -> ( Model, Cmd Msg )
+reverseGeocode model =
     let
         url =
             Url.crossOrigin "https://nominatim.openstreetmap.org" ["reverse"]
@@ -94,10 +92,7 @@ reverseGeocode ( model, cmd ) =
                 , Url.int "polygon_geojson" 1
                 ]
     in
-    ( model, Cmd.batch
-        [ cmd
-        , Http.send ReverseGeocode <| Http.get url placeDecoder
-        ] )
+    ( model, Http.send ReverseGeocode <| Http.get url placeDecoder )
 
 
 ---- MODEL ----
@@ -374,51 +369,42 @@ route model =
         Just route_ ->
             case route_ of
                 Home ->
-                    reverseGeocode
-                        ( model , Cmd.none )
+                    reverseGeocode model
             
                 Search maybeQuery ->
                     case validatePlace maybeQuery of
                         Nothing ->
-                            model |> toast "Geen geldige zoekopdracht"
+                            toast "Geen geldige zoekopdracht" model
                     
                         Just query ->
-                            geocode query
-                                ( model, Cmd.none )
+                            geocode query model
             
                 Reverse maybeLon maybeLat maybeZoom ->
                     case validateLonLat ( maybeLon, maybeLat ) of
                         Nothing ->
-                            model |> toast "Geen geldige coördinaten"
+                            toast "Geen geldige coördinaten" model
                     
                         Just ( lonString, latString ) ->
-                            reverseGeocode
-                                ( model
-                                    |> setZoom maybeZoom
-                                    |> saveField "lon" lonString
-                                    |> saveField "lat" latString
-                                , Cmd.none )
+                            reverseGeocode (model
+                                |> setZoom maybeZoom
+                                |> saveField "lon" lonString
+                                |> saveField "lat" latString
+                            )
 
 
-navSearch : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-navSearch ( model, cmd ) =
-    ( model, Cmd.batch
-        [ cmd
-        , Nav.pushUrl model.key <| Url.relative [ "search" ]
-            [ Url.string "query" <| fieldValue "place" model
-            ]
+navSearch : Model -> ( Model, Cmd Msg )
+navSearch model =
+    ( model, Nav.pushUrl model.key <| Url.relative [ "search" ]
+        [ Url.string "query" <| fieldValue "place" model
         ] )
 
 
-navReverse : Maybe Float -> ( String, String ) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-navReverse maybeZoom ( lon, lat ) ( model, cmd ) =
-    ( model, Cmd.batch
-        [ cmd
-        , Nav.pushUrl model.key <| Url.relative [ "reverse" ]
-            [ Url.string "lon" <| floatFormat lon
-            , Url.string "lat" <| floatFormat lat
-            , Url.string "zoom" <| String.fromFloat (Maybe.withDefault model.zoom maybeZoom)
-            ]
+navReverse : Maybe Float -> ( String, String ) -> Model -> ( Model, Cmd Msg )
+navReverse maybeZoom ( lon, lat ) model =
+    ( model, Nav.pushUrl model.key <| Url.relative [ "reverse" ]
+        [ Url.string "lon" <| floatFormat lon
+        , Url.string "lat" <| floatFormat lat
+        , Url.string "zoom" <| String.fromFloat (Maybe.withDefault model.zoom maybeZoom)
         ] )
 
 
@@ -449,6 +435,7 @@ type Msg
     | FieldChange String String
     | MapMoved MapView
     | Geocode (Result Http.Error (List PlaceModel))
+    | Select PlaceModel
     | ReverseGeocode (Result Http.Error PlaceModel)
     
 
@@ -501,11 +488,10 @@ update msg model =
                 "place" ->
                     case validatePlace <| Just input of
                         Nothing ->
-                            ( model |> untypeField field, Cmd.none )
+                            ( untypeField field model, Cmd.none )
                             
                         Just place ->
-                            navSearch
-                                ( model |> saveField field place, Cmd.none )
+                            navSearch <| saveField field place model
                 
                 "lon" ->
                     lonLatChange field model
@@ -527,58 +513,82 @@ update msg model =
                     , Cmd.none )
             
                 False ->
-                    navReverse
+                    model |> navReverse
                         (Just mapView.zoom)
                         (mapBothSame String.fromFloat
                             ( mapView.center.lon, mapView.center.lat ))
-                        ( model, Cmd.none )
                                 
         Geocode result ->
             case result of
                 Ok places ->
-                    case (List.head places) of
+                    case List.head places of
                         Nothing ->
-                            model |> toast "Niets gevonden"
+                            unselectPlace "Niets gevonden" model
                             
                         Just place ->
-                            mapFit ( { model | geoJson = Just place.geoJson }
-                                |> saveField "lon" (String.fromFloat place.lon)
-                                |> saveField "lat" (String.fromFloat place.lat)
-                                |> saveField "place" place.displayName
-                            , Cmd.none )
+                            case List.length places of
+                                1 ->
+                                    selectPlace place model
+                            
+                                _ ->
+                                    ( { model | places = places }, Cmd.none )
 
                 Err err ->
-                    model |> toast (httpErrorMessage err "geocoderen")
+                    unselectPlace (httpErrorMessage err "geocoderen") model
+        
+        Select place ->
+            selectPlace place model
                     
         ReverseGeocode result ->
+            let
+                newmodel =
+                    { model | places = [] }
+            in
             case result of
                 Ok place ->
-                    mapFly ( { model | geoJson = Just place.geoJson }
+                    mapFly ( { newmodel | geoJson = Just place.geoJson }
                         |> saveField "place" place.displayName
                     , Cmd.none )
 
                 Err err ->
                     let
-                       newmodel =
-                           { model | geoJson = Nothing }
-                            |> saveField "place" "" 
+                       errmodel =
+                            { newmodel | geoJson = Nothing }
+                                |> saveField "place" "" 
                     in
                     mapFly <| case err of
                         Http.BadPayload _ _ ->
-                            ( newmodel, Cmd.none )
+                            ( errmodel, Cmd.none )
                         
                         _ ->
-                            newmodel |> toast (httpErrorMessage err "omgekeerd geocoderen")
+                            toast (httpErrorMessage err "omgekeerd geocoderen") errmodel
 
 
 lonLatChange : String -> Model -> ( String, String ) -> ( Model, Cmd Msg )
 lonLatChange field model ( lon, lat ) =
     case validateLonLat <| mapBothSame String.toFloat ( lon, lat ) of
         Nothing ->
-            ( model |> untypeField field, Cmd.none )
+            ( untypeField field model, Cmd.none )
     
         Just ( lonString, latString ) ->
-            navReverse Nothing ( lonString, latString ) ( model, Cmd.none )
+            navReverse Nothing ( lonString, latString ) model
+
+
+selectPlace : PlaceModel -> Model -> ( Model, Cmd Msg )
+selectPlace place model =
+    mapFit ( { model | geoJson = Just place.geoJson }
+        |> saveField "lon" (String.fromFloat place.lon)
+        |> saveField "lat" (String.fromFloat place.lat)
+        |> saveField "place" place.displayName
+    , Cmd.none )
+
+
+unselectPlace : String -> Model -> ( Model, Cmd Msg )
+unselectPlace message model =
+    mapFit <| toast message { model
+        | geoJson = Nothing
+        , places = []
+    }
 
 
 blur : String -> Cmd Msg
@@ -654,6 +664,7 @@ view model =
                 , style "position" "absolute"
                 , style "top" ".5em", style "left" ".5em"
                 , style "width" "calc(100% - 1em)"
+                , class "mdc-menu-anchor"
                 ]
                 [ Textfield.view Mdc "textfield-place" model.mdc
                     [ Textfield.label "Plek"
@@ -670,7 +681,26 @@ view model =
                         , Options.onBlur (FieldBlur "place")
                         , Options.on "keydown" <| D.map (FieldKey "place") keyCode
                         ]
+                    , Menu.attach Mdc "places-menu"
                     ] []
+                , case List.length model.places of
+                    0 ->
+                        text ""
+                
+                    _ ->
+                        Menu.view Mdc "places-menu" model.mdc
+                            [ Menu.anchorCorner Menu.topLeftCorner
+                            , Menu.anchorMargin {top = 56, left = 0, bottom = 0, right = 0}
+                            ]
+                            ( Menu.ul [] <|
+                                List.map (\place ->
+                                    Menu.li
+                                        [ Menu.onSelect (Select place)
+                                        ]
+                                        [ text place.displayName
+                                        ]
+                                ) model.places
+                            )
                 ]
             , div [ id "lonlat"
                 , style "position" "absolute"
