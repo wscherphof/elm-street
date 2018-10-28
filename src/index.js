@@ -25,6 +25,7 @@ registerServiceWorker();
     switch (msg.Cmd) {
       case 'Fly':
         fly(msg.lon, msg.lat, msg.zoom);
+        console.log (msg.geoJson);
         break;
     }
   });

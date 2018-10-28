@@ -24,6 +24,7 @@ import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
+import GeoJson
 
 
 ---- HTTP ----
@@ -52,15 +53,17 @@ type alias PlaceModel =
     { lon : Float
     , lat : Float
     , displayName : String
+    , geoJson : GeoJson.GeoJson
     }
 
 
 placeDecoder : D.Decoder PlaceModel
 placeDecoder =
-    D.map3 PlaceModel
+    D.map4 PlaceModel
         (D.field "lon" D.parseFloat)
         (D.field "lat" D.parseFloat)
         (D.field "display_name" D.string)
+        (D.field "geojson" GeoJson.decoder)
 
 
 geocode : String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -70,6 +73,7 @@ geocode q ( model, cmd ) =
             Url.crossOrigin "https://nominatim.openstreetmap.org" ["search"]
                 [ Url.string "q" q
                 , Url.string "format" "json"
+                , Url.int "polygon_geojson" 1
                 ]
     in
     ( model, Cmd.batch
@@ -87,6 +91,7 @@ reverseGeocode ( model, cmd ) =
                 , Url.string "lat" <| fieldValue "lat" model
                 , Url.int "zoom" <| round model.zoom
                 , Url.string "format" "json"
+                , Url.int "polygon_geojson" 1
                 ]
     in
     ( model, Cmd.batch
@@ -246,6 +251,7 @@ type alias Model =
     , key : Nav.Key
     , fields : Dict String FieldModel
     , zoom : Float
+    , geoJson : Maybe GeoJson.GeoJson
     }
 
 
@@ -260,6 +266,7 @@ defaultModel url key =
         , ("place", defaultFieldModel)
         ]
     , zoom = 16
+    , geoJson = Nothing
     }
 
 
@@ -539,7 +546,8 @@ update msg model =
                     ( model, Cmd.none )
 
         MapMoved mapView ->
-            navReverse (Just mapView.zoom)
+            navReverse
+                (Just mapView.zoom)
                 (mapBothSame String.fromFloat
                     ( mapView.center.lon, mapView.center.lat ))
                 ( model, Cmd.none )
@@ -552,7 +560,7 @@ update msg model =
                             model |> toast "Niets gevonden"
                             
                         Just place ->
-                            mapMove ( model
+                            mapMove ( { model | geoJson = Just place.geoJson }
                                 |> saveField "lon" (String.fromFloat place.lon)
                                 |> saveField "lat" (String.fromFloat place.lat)
                                 |> saveField "place" place.displayName
@@ -731,9 +739,24 @@ port mapMoved : (MapView -> msg) -> Sub msg
 port map : E.Value -> Cmd msg
 
 
-floatValue : String -> Model -> Float
-floatValue field model =
-    String.toFloat (fieldValue field model) |> Maybe.withDefault 0 
+lonLatValue : String -> Model -> E.Value
+lonLatValue field model =
+    case String.toFloat (fieldValue field model) of
+        Nothing ->
+            E.float 0
+    
+        Just float ->
+            E.float float
+
+
+geoJsonValue : Model -> E.Value
+geoJsonValue model =
+    case model.geoJson of
+        Nothing ->
+            E.null
+    
+        Just geoJson ->
+            GeoJson.encode geoJson
 
 
 mapMove : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -742,9 +765,10 @@ mapMove ( model, cmd ) =
         [ cmd
         , map <| E.object
             [ ("Cmd", E.string "Fly")
-            , ("lon", E.float <| floatValue "lon" model)
-            , ("lat", E.float <| floatValue "lat" model)
+            , ("lon", lonLatValue "lon" model)
+            , ("lat", lonLatValue "lat" model)
             , ("zoom", E.float model.zoom)
+            , ("geoJson", geoJsonValue model)
             ]
         ] )
 
