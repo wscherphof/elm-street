@@ -10,22 +10,25 @@ registerServiceWorker();
 
 (function port_map() {
   function moveend() {
-    var view = getMap().getView();
-    var coordinate = ol.proj.toLonLat(view.getCenter());
+    // console.log('moveend');
+    var coordinate = ol.proj.toLonLat(view().getCenter());
     app.ports.mapMoved.send({
       center: {
         lon: coordinate[0],
         lat: coordinate[1]
       },
-      zoom: view.getZoom()
+      zoom: view().getZoom()
     });
   }
   
-  app.ports.map.subscribe(function(msg) {
+  app.ports.mapPort.subscribe(function(msg) {
     switch (msg.Cmd) {
       case 'Fly':
         fly(msg.lon, msg.lat, msg.zoom);
-        console.log (msg.geoJson);
+        place(msg.geoJson, false);
+        break;
+      case 'Fit':
+        place(msg.geoJson, true);
         break;
     }
   });
@@ -35,35 +38,53 @@ registerServiceWorker();
     fly(coordinate[0], coordinate[1]);
   }
   
+  function place(geoJson, fit) {
+    _places.clear();
+    // console.log('geoJson', geoJson);
+    if (geoJson) {
+      _places.addFeatures(_geoJsonFormat.readFeatures(geoJson));
+      if (fit) {
+        view().fit(_places.getExtent(), {
+          duration: 300,
+          maxZoom: 18
+        });
+      }
+    }
+  }
+  
   function fly(lon, lat, zoom) {
     var coordinate = ol.proj.fromLonLat([lon, lat]);
-    var view = getMap().getView();
-    view.animate({
+    view().animate({
       center: coordinate,
       zoom: zoom,
       duration: 300
     });
-}
+  }
 
   var _map;
-  function getMap() {
+  var _places = new ol.source.Vector();
+  var _geoJsonFormat = new ol.format.GeoJSON({featureProjection: 'EPSG:3857'});
+  function view() {
     if (!_map) {
       _map = new ol.Map({
         target: 'map',
         layers: [
             new ol.layer.Tile({
                 source: new ol.source.OSM()
+            }),
+            new ol.layer.Vector({
+              source: _places
             })
         ],
         view: new ol.View({
-            center: ol.proj.fromLonLat([0, 0]),
-            zoom: 15
-        })
-      });
+          center: ol.proj.fromLonLat([0, 0]),
+          zoom: 16
+      })
+    });
       _map.on('singleclick', singleclick);
       _map.on('moveend', moveend);
     }
-    return _map;
+    return _map.getView();
   }
 })();
 

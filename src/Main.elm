@@ -240,9 +240,9 @@ floatFormat input =
                 input
 
 
-lonLatFieldModel : FieldModel
-lonLatFieldModel =
-    FieldModel "" "" False False floatFormat
+lonLatFieldModel : String -> FieldModel
+lonLatFieldModel defaultValue =
+    FieldModel (floatFormat defaultValue) (floatFormat defaultValue) False False floatFormat
 
 
 type alias Model =
@@ -253,22 +253,6 @@ type alias Model =
     , zoom : Float
     , geoJson : Maybe GeoJson.GeoJson
     , moving : Bool
-    }
-
-
-defaultModel : Url.Url -> Nav.Key -> Model
-defaultModel url key =
-    { mdc = Material.defaultModel
-    , url = url
-    , key = key
-    , fields = Dict.fromList
-        [ ("lon", lonLatFieldModel)
-        , ("lat", lonLatFieldModel)
-        , ("place", defaultFieldModel)
-        ]
-    , zoom = 16
-    , geoJson = Nothing
-    , moving = False
     }
 
 
@@ -311,6 +295,22 @@ validatePlace maybeString =
                 Just string
 
 
+defaultModel : Url.Url -> Nav.Key -> Model
+defaultModel url key =
+    { mdc = Material.defaultModel
+    , url = url
+    , key = key
+    , fields = Dict.fromList
+        [ ("lon", lonLatFieldModel "-76.81645")
+        , ("lat", lonLatFieldModel "42.08871")
+        , ("place", defaultFieldModel)
+        ]
+    , zoom = 16
+    , geoJson = Nothing
+    , moving = False
+    }
+
+
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
     let
@@ -322,10 +322,6 @@ init _ url key =
         , cmd
         ]
     )
-
-
-elmStreet =
-    ( "-76.81645", "42.08871" )
 
 
 ---- ROUTES ----
@@ -356,14 +352,14 @@ routeParser : Parser (Route -> a) a
 routeParser =
     Parser.oneOf
         [ Parser.map Home    (Parser.top)
-        , Parser.map Search  (Parser.s "search" <?> Query.string "query" <?> queryFloat "zoom")
+        , Parser.map Search  (Parser.s "search" <?> Query.string "query")
         , Parser.map Reverse (Parser.s "reverse" <?> queryFloat "lon" <?> queryFloat "lat" <?> queryFloat "zoom")
         ]
 
 
 type Route
     = Home
-    | Search (Maybe String) (Maybe Float)
+    | Search (Maybe String)
     | Reverse (Maybe Float) (Maybe Float) (Maybe Float)
             
 
@@ -377,18 +373,17 @@ route model =
             case route_ of
                 Home ->
                     navReverse_ Nav.replaceUrl Nothing
-                        elmStreet ( model, Cmd.none )
+                        ( fieldValue "lon" model, fieldValue "lat" model )
+                        ( model, Cmd.none )
             
-                Search maybeQuery maybeZoom ->
+                Search maybeQuery ->
                     case validatePlace maybeQuery of
                         Nothing ->
                             model |> toast "Geen geldige zoekopdracht"
                     
                         Just query ->
                             geocode query
-                                ( model
-                                    |> setZoom maybeZoom
-                                , Cmd.none )
+                                ( model, Cmd.none )
             
                 Reverse maybeLon maybeLat maybeZoom ->
                     case validateLonLat ( maybeLon, maybeLat ) of
@@ -402,7 +397,6 @@ route model =
                                     |> saveField "lon" lonString
                                     |> saveField "lat" latString
                                 , Cmd.none )
-                                |> mapMove
 
 
 navSearch : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -411,7 +405,6 @@ navSearch ( model, cmd ) =
         [ cmd
         , Nav.pushUrl model.key <| Url.relative [ "search" ]
             [ Url.string "query" <| fieldValue "place" model
-            , Url.string "zoom" <| String.fromFloat model.zoom
             ]
         ] )
 
@@ -532,7 +525,10 @@ update msg model =
         MapMoved mapView ->
             case model.moving of
                 True ->
-                    ( { model | moving = False }, Cmd.none )
+                    ( { model | moving = False, zoom = mapView.zoom }
+                        |> saveField "lon" (String.fromFloat mapView.center.lon)
+                        |> saveField "lat" (String.fromFloat mapView.center.lat)
+                    , Cmd.none )
             
                 False ->
                     navReverse
@@ -549,7 +545,7 @@ update msg model =
                             model |> toast "Niets gevonden"
                             
                         Just place ->
-                            mapMove ( { model | geoJson = Just place.geoJson }
+                            mapFit ( { model | geoJson = Just place.geoJson }
                                 |> saveField "lon" (String.fromFloat place.lon)
                                 |> saveField "lat" (String.fromFloat place.lat)
                                 |> saveField "place" place.displayName
@@ -561,16 +557,17 @@ update msg model =
         ReverseGeocode result ->
             case result of
                 Ok place ->
-                    ( model
+                    mapFly ( { model | geoJson = Just place.geoJson }
                         |> saveField "place" place.displayName
                     , Cmd.none )
 
                 Err err ->
                     let
                        newmodel =
-                           model |> saveField "place" "" 
+                           { model | geoJson = Nothing }
+                            |> saveField "place" "" 
                     in
-                    case err of
+                    mapFly <| case err of
                         Http.BadPayload _ _ ->
                             ( newmodel, Cmd.none )
                         
@@ -725,7 +722,7 @@ subscriptions model =
 port mapMoved : (MapView -> msg) -> Sub msg
 
 
-port map : E.Value -> Cmd msg
+port mapPort : E.Value -> Cmd msg
 
 
 lonLatValue : String -> Model -> E.Value
@@ -748,15 +745,26 @@ geoJsonValue model =
             GeoJson.encode geoJson
 
 
-mapMove : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-mapMove ( model, cmd ) =
+mapFly : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+mapFly ( model, cmd ) =
     ( { model | moving = True }, Cmd.batch
         [ cmd
-        , map <| E.object
+        , mapPort <| E.object
             [ ("Cmd", E.string "Fly")
             , ("lon", lonLatValue "lon" model)
             , ("lat", lonLatValue "lat" model)
             , ("zoom", E.float model.zoom)
+            , ("geoJson", geoJsonValue model)
+            ]
+        ] )
+
+
+mapFit : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+mapFit ( model, cmd ) =
+    ( { model | moving = True }, Cmd.batch
+        [ cmd
+        , mapPort <| E.object
+            [ ("Cmd", E.string "Fit")
             , ("geoJson", geoJsonValue model)
             ]
         ] )
