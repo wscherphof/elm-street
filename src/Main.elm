@@ -252,6 +252,7 @@ type alias Model =
     , fields : Dict String FieldModel
     , zoom : Float
     , geoJson : Maybe GeoJson.GeoJson
+    , moving : Bool
     }
 
 
@@ -267,6 +268,7 @@ defaultModel url key =
         ]
     , zoom = 16
     , geoJson = Nothing
+    , moving = False
     }
 
 
@@ -421,32 +423,14 @@ navReverse maybeZoom ( lon, lat ) ( model, cmd ) =
 
 navReverse_ : (Nav.Key -> String -> Cmd Msg) -> Maybe Float -> ( String, String ) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 navReverse_ nav maybeZoom ( lon, lat ) ( model, cmd ) =
-    let
-        ( lonValue, latValue ) =
-            mapBothSame floatFormat ( lon, lat )
-
-        ( zoomEqual, zoomString ) = 
-            case maybeZoom of
-                Nothing ->
-                    ( True, String.fromFloat model.zoom )
-            
-                Just zoom ->
-                    ( zoom == model.zoom, String.fromFloat zoom )
-    in
-    if lonValue == fieldValue "lon" model
-    && latValue == fieldValue "lat" model
-    && zoomEqual then
-        ( model, cmd )
-
-    else
-        ( model, Cmd.batch
-            [ cmd
-            , nav model.key <| Url.relative [ "reverse" ]
-                [ Url.string "lon" lonValue
-                , Url.string "lat" latValue
-                , Url.string "zoom" zoomString
-                ]
-            ] )
+    ( model, Cmd.batch
+        [ cmd
+        , nav model.key <| Url.relative [ "reverse" ]
+            [ Url.string "lon" <| floatFormat lon
+            , Url.string "lat" <| floatFormat lat
+            , Url.string "zoom" <| String.fromFloat (Maybe.withDefault model.zoom maybeZoom)
+            ]
+        ] )
 
 
 ---- UPDATE ----
@@ -546,11 +530,16 @@ update msg model =
                     ( model, Cmd.none )
 
         MapMoved mapView ->
-            navReverse
-                (Just mapView.zoom)
-                (mapBothSame String.fromFloat
-                    ( mapView.center.lon, mapView.center.lat ))
-                ( model, Cmd.none )
+            case model.moving of
+                True ->
+                    ( { model | moving = False }, Cmd.none )
+            
+                False ->
+                    navReverse
+                        (Just mapView.zoom)
+                        (mapBothSame String.fromFloat
+                            ( mapView.center.lon, mapView.center.lat ))
+                        ( model, Cmd.none )
                                 
         Geocode result ->
             case result of
@@ -761,7 +750,7 @@ geoJsonValue model =
 
 mapMove : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 mapMove ( model, cmd ) =
-    ( model, Cmd.batch
+    ( { model | moving = True }, Cmd.batch
         [ cmd
         , map <| E.object
             [ ("Cmd", E.string "Fly")
