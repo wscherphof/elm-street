@@ -305,7 +305,7 @@ defaultModel url key =
         , ("lat", lonLatFieldModel "42.08871")
         , ("place", defaultFieldModel)
         ]
-    , zoom = 16
+    , zoom = 17
     , geoJson = Nothing
     , moving = False
     }
