@@ -308,6 +308,7 @@ defaultModel url key =
     , zoom = 17
     , geoJson = Nothing
     , moving = False
+    , places = []
     }
 
 
@@ -372,9 +373,8 @@ route model =
         Just route_ ->
             case route_ of
                 Home ->
-                    navReverse_ Nav.replaceUrl Nothing
-                        ( fieldValue "lon" model, fieldValue "lat" model )
-                        ( model, Cmd.none )
+                    reverseGeocode
+                        ( model , Cmd.none )
             
                 Search maybeQuery ->
                     case validatePlace maybeQuery of
@@ -411,14 +411,9 @@ navSearch ( model, cmd ) =
 
 navReverse : Maybe Float -> ( String, String ) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 navReverse maybeZoom ( lon, lat ) ( model, cmd ) =
-    navReverse_ Nav.pushUrl maybeZoom ( lon, lat ) ( model, cmd )
-
-
-navReverse_ : (Nav.Key -> String -> Cmd Msg) -> Maybe Float -> ( String, String ) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-navReverse_ nav maybeZoom ( lon, lat ) ( model, cmd ) =
     ( model, Cmd.batch
         [ cmd
-        , nav model.key <| Url.relative [ "reverse" ]
+        , Nav.pushUrl model.key <| Url.relative [ "reverse" ]
             [ Url.string "lon" <| floatFormat lon
             , Url.string "lat" <| floatFormat lat
             , Url.string "zoom" <| String.fromFloat (Maybe.withDefault model.zoom maybeZoom)
