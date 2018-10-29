@@ -24,7 +24,12 @@ registerServiceWorker();
   app.ports.mapPort.subscribe(function(msg) {
     switch (msg.Cmd) {
       case 'Fly':
+        // console.log('fly');
         fly(msg.lon, msg.lat, msg.zoom);
+        place(msg.geoJson, false);
+        break;
+      case 'Render':
+        // console.log('Render');
         place(msg.geoJson, false);
         break;
       case 'Fit':
