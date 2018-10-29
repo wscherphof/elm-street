@@ -1,3 +1,7 @@
+// mdc
+import './elm-mdc.js';
+import './material-components-web.css';
+
 import './main.css';
 import { Elm } from './Main.elm';
 import registerServiceWorker from './registerServiceWorker';
