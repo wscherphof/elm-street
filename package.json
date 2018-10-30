@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/wscherphof/elm-street#readme",
   "devDependencies": {
-    "create-elm-app": "^2.2.0"
+    "create-elm-app": "^2.2.0",
+    "debounce": "^1.2.0"
   }
 }

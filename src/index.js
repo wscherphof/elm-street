@@ -1,3 +1,5 @@
+import { debounce } from "debounce";
+
 // mdc
 import './elm-mdc.js';
 import './material-components-web.css';
@@ -91,7 +93,7 @@ registerServiceWorker();
       })
     });
       _map.on('singleclick', singleclick);
-      _map.on('moveend', moveend);
+      _map.on('moveend', debounce(moveend, 1000, true));
     }
     return _map.getView();
   }
