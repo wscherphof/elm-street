@@ -190,49 +190,44 @@ floatFormat input =
             ""
             
         Just float ->
-            let
-                parts =
-                    String.split "." input
-                
-                first =
-                    List.head parts |> Maybe.withDefault ""
-                
-                last =
-                    List.last parts |> Maybe.withDefault ""
-            in
-            if List.length parts == 2 && String.length last > 5 then
-                let
-                    fraction =
-                        String.toFloat ("0.1" ++ last) |> Maybe.withDefault 0
+            case String.split "." input of
+                [ first, last ] ->
+                    if String.length last > 5 then
+                        let
+                            fraction =
+                                String.toFloat ("0.1" ++ last) |> Maybe.withDefault 0
 
-                    decimals =
-                        round (fraction * 1000000)
-                    
-                    front =
-                        if decimals == 200000 then
-                            let
-                                num =
-                                    String.toInt first |> Maybe.withDefault 0
+                            decimals =
+                                round (fraction * 1000000)
+                            
+                            front =
+                                if decimals == 200000 then
+                                    let
+                                        num =
+                                            String.toInt first |> Maybe.withDefault 0
+                                        
+                                        next =
+                                            abs num + 1
+                                        
+                                        val =
+                                            if num < 0 then
+                                                0 - next
+                                            
+                                            else
+                                                next
+                                    in
+                                    String.fromInt val
                                 
-                                next =
-                                    abs num + 1
-                                
-                                val =
-                                    if num < 0 then
-                                        0 - next
-                                    
-                                    else
-                                        next
-                            in
-                            String.fromInt val
-                        
-                        else
-                            first
-                in
-                front ++ "." ++ (String.dropLeft 1 <| String.fromInt decimals)
+                                else
+                                    first
+                        in
+                        front ++ "." ++ (String.dropLeft 1 <| String.fromInt decimals)
 
-            else
-                input
+                    else
+                        input
+
+                _ ->
+                    input
 
 
 lonLatFieldModel : String -> FieldModel
